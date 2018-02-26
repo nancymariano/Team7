@@ -104,9 +104,13 @@ def make_file(file_size, file_path):
             new_blocks = ""
 
             for j in range(REPLICATION_FACTOR):
-                new_blocks = new_blocks + assign_nodes[node_iterator] + ", "
-                node_iterator = node_iterator + 1
-            return_blocks.append("{" + new_blocks[0:-1] + "}")
+                if j == 0:
+                    new_blocks = new_blocks + assign_nodes[node_iterator]
+                    node_iterator = node_iterator + 1
+                else:
+                    new_blocks = new_blocks + ", " + assign_nodes[node_iterator]
+                    node_iterator = node_iterator + 1
+            return_blocks.append("{" + new_blocks + "}")
 
             if i == 0:
                 write_file_to_block.write(partition)
@@ -125,8 +129,9 @@ def get_open_location(REPLICATION_FACTOR, num_blocks):
     nodes = dict()
     read_block_to_node = open(block_to_node)
     for line_of_text in read_block_to_node:
-        if line_of_text != "":
-        # gets first number in curly braces
+        if (line_of_text != "\n") & (line_of_text.split()[1][1] != "}"):
+            # gets first number in curly braces
+            # REPLICATION_FACTOR must be 3 - BAD!!
             nodes[line_of_text.split()[1][1]] = nodes.get(line_of_text.split()[1][1], 0) + 1
             nodes[line_of_text.split()[2][0]] = nodes.get(line_of_text.split()[2][0], 0) + 1
             nodes[line_of_text.split()[3][0]] = nodes.get(line_of_text.split()[3][0], 0) + 1
@@ -159,7 +164,17 @@ def main():
     #get_open_location testing
     print(get_open_location(3,2))
     """
-    print(make_file(128, "/Users/isabellebutterfield/test.txt"))
+    # print(make_file(128, "/Users/isabellebutterfield/test.txt"))
+    # print(make_file(256, "/Users/isabellebutterfield/test2.txt"))
+    print(make_file(250, "/Users/isabellebutterfield/test3.txt"))
+
+    ############################################################
+
+    # HI NANCY!!
+    # Here's an example of what you'll get from calling make_file(256, "/Users/isabellebutterfield/test2.txt")
+    # ['/Users/isabellebutterfield/test2.txt/part-0', '{3, 2, 4}', '/Users/isabellebutterfield/test2.txt/part-1', '{1, 3, 5}', '/Users/isabellebutterfield/test2.txt/part-2', '{2, 4, 1}', '/Users/isabellebutterfield/test2.txt/part-3', '{3, 5, 2}']
+
+    ############################################################
 
 if __name__ == '__main__':
     main()
