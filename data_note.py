@@ -5,6 +5,9 @@ import boto
 # Class for rpyc service
 
 class DataNodeService(rpyc.Service):
+    NN_IP = ""
+    MY_IP = ""
+    PORT = 5000
 
     # Precondition: file is not duplicated
     # Postcondition: file is stored
@@ -22,13 +25,14 @@ class DataNodeService(rpyc.Service):
     # Precondition:
     # Postcondition: block report is sent
     # Function: sends updates on what is being stored on the DataNode
-    def sendBlockReport(self, path):
+    def sendBlockReport(self, ip, path):
         dir = os.listdir(path)
         block_list = []
         for path, dirs, files in os.walk(path):
             for filename in files:
                 block_list.append(filename)
-        return(block_list)
+        c = rpyc.connect(NN_IP, PORT)
+        cmds = c.root.receive_block_report(MY_IP, block_list)
 
     # Precondition: request for a block is received from client
     # Postcondition: block is sent to the client
@@ -58,6 +62,7 @@ class DataNodeService(rpyc.Service):
     def replicateBlock(self, path):
         client = rpyc.connect('localhost', 5000, config={'allow_public_attrs': True})
         return
+
 
     def exposed_test(self, message):
         print("Received Message: " + message)
