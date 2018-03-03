@@ -12,15 +12,12 @@ class DataNodeService(rpyc.Service):
     # Precondition: file is not duplicated
     # Postcondition: file is stored
     # Function: accepts a data tranasfer from a client
-    def exposed_acceptWriteFromClient(self, c, b, path):
+    def exposed_acceptWriteFromClient(self, b, path, destinations):
         if os.path.isfile(b):
             return "File name already exists"
         else:
-            lines = b.read()
-            new_path = path + b
-            new_file = open(new_path, 'w')
-            new_file.write(lines)
-            new_file.close()
+            self.exposed_replicateBlock()
+
 
     # Precondition:
     # Postcondition: block report is sent
@@ -37,14 +34,19 @@ class DataNodeService(rpyc.Service):
     # Precondition: request for a block is received from client
     # Postcondition: block is sent to the client
     # Function: a
-    def sendBlockToClient(self, path): #if client sends a request
+    def exposed_sendBlockToClient(self, path): #if client sends a request
         return
 
     # Precondition: block is received from client
     # Postcondition: block is stored, confirmation is sent to client
     # Function:
-    def storeBlock(self, fileobj):
-        replicateBlock(fileobj)
+    def storeBlock(self, file, path):
+        lines = file.read()
+        new_path = path + file
+        new_file = open(new_path, 'w')
+        new_file.write(lines)
+        new_file.close()
+
         return
 
     # Precondition: request to delete a block is recvd from client
@@ -59,8 +61,12 @@ class DataNodeService(rpyc.Service):
     # Precondition: a block is received from another DataNode
     # Postcondition: a block is forwarded to the next DataNode in the path
     # Function:
-    def replicateBlock(self, path):
-        client = rpyc.connect('localhost', 5000, config={'allow_public_attrs': True})
+    def exposed_replicateBlock(self, file, path, destinations):
+        self.storeBlock(file, path)
+        destinations = destinations[1:]
+        if len(destinations) > 0:
+            c = rpyc.connect(destinations[0], 5000)
+            c.root.replicateBlock(file, path, destinations)
         return
 
 
