@@ -31,7 +31,7 @@ def receive_block_report(block_list, node_id):
         line_breakdown = each_line.split(",")
         if line_breakdown[0] in block_list:
             if node_id not in line_breakdown:
-                my_file.write(each_line + "," + node_id)  # incorrect syntax
+                my_file.write(each_line + node_id + ",")  # incorrect syntax
             else:
                 my_file.write(each_line)
         else:
@@ -91,3 +91,4 @@ def delete_path(path):
         my_file.close()
     success = 1
     return success
+
