@@ -1,4 +1,6 @@
-# Precondition: file is not duplicated 
+import os
+
+# Precondition: file is not duplicated
 # Postcondition: file is stored 
 # Function: accepts a data tranasfer from a client
 def acceptWriteFromClient(c, b, path):
@@ -7,8 +9,13 @@ def acceptWriteFromClient(c, b, path):
 # Precondition: 
 # Postcondition: block report is sent 
 # Function: sends updates on what is being stored on the DataNode
-def sendBlockReport(paths):
-    print()
+def sendBlockReport(path):
+    dir = os.listdir(path)
+    block_list = []
+    for path, dirs, files in os.walk(path):
+        for filename in files:
+            block_list.append(filename)
+    return(block_list)
 
 # Precondition: request for a block is received from client
 # Postcondition: block is sent to the client
