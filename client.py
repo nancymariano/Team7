@@ -1,7 +1,7 @@
 import rpyc
 
 block_size = 128
-data_node_IP = '54.202.89.188'
+data_node_IP = ''
 
 conn = rpyc.connect(data_node_IP, 5000, config={'allow_public_attrs': True})
 print("Connecting with server...")
