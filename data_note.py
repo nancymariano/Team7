@@ -91,6 +91,6 @@ class DataNode(rpyc.Service):
 
 if __name__ == '__main__':
     from rpyc.utils.server import ThreadedServer
-    t = ThreadedServer(DataNodeService, port=5000)
+    t = ThreadedServer(DataNode, port=5000)
     t.start()
     #sendBlockReport(path)
