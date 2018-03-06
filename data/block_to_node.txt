@@ -2,13 +2,15 @@
 /Users/isabellebutterfield/SUFS/Team7/data/file1/part-1, {1, 2, 4}
 /Users/isabellebutterfield/SUFS/Team7/data/file2/part-0, {2, 3, 5}
 /Users/isabellebutterfield/SUFS/Team7/data/file2/part-1, {1, 4, 5}
-/Users/isabellebutterfield/test.txt/part-0, {}
-/Users/isabellebutterfield/test.txt/part-1, {}
+/Users/isabellebutterfield/test.txt/part-0, {1, 2}
+/Users/isabellebutterfield/test.txt/part-1, {1}
 /Users/isabellebutterfield/test2.txt/part-0, {}
 /Users/isabellebutterfield/test2.txt/part-1, {}
 /Users/isabellebutterfield/test2.txt/part-2, {}
-/Users/isabellebutterfield/test2.txt/part-3, {}
+/Users/isabellebutterfield/test2.txt/part-3, {5, 1}
 /Users/isabellebutterfield/test3.txt/part-0, {}
 /Users/isabellebutterfield/test3.txt/part-1, {}
 /Users/isabellebutterfield/test3.txt/part-2, {}
 /Users/isabellebutterfield/test3.txt/part-3, {}
+/Users/isabellebutterfield/test4.txt/part-0, {}
+/Users/isabellebutterfield/test4.txt/part-1, {}
