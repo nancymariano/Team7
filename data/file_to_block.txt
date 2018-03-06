@@ -9,3 +9,5 @@
 /Users/isabellebutterfield/test2.txt, {part-0, part-1, part-2, part-3}
 /Users/isabellebutterfield/test3.txt, {part-0, part-1, part-2, part-3}
 /Users/isabellebutterfield/test4.txt, {part-0, part-1}
+/Users/isabellebutterfield/test5.txt, {part-0, part-1, part-2, part-3, part-4, part-5, part-6, part-7}
+/Users/isabellebutterfield/test6.txt, {part-0}

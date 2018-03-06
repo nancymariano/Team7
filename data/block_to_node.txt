@@ -14,3 +14,12 @@
 /Users/isabellebutterfield/test3.txt/part-3, {}
 /Users/isabellebutterfield/test4.txt/part-0, {}
 /Users/isabellebutterfield/test4.txt/part-1, {}
+/Users/isabellebutterfield/test5.txt/part-0, {}
+/Users/isabellebutterfield/test5.txt/part-1, {}
+/Users/isabellebutterfield/test5.txt/part-2, {}
+/Users/isabellebutterfield/test5.txt/part-3, {}
+/Users/isabellebutterfield/test5.txt/part-4, {}
+/Users/isabellebutterfield/test5.txt/part-5, {}
+/Users/isabellebutterfield/test5.txt/part-6, {}
+/Users/isabellebutterfield/test5.txt/part-7, {}
+/Users/isabellebutterfield/test6.txt/part-0, {}

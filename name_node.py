@@ -127,34 +127,21 @@ def make_file(file_size, file_path):
 
 
 def get_open_location(REPLICATION_FACTOR, num_blocks):
-    nodes = dict()
-    read_block_to_node = open(block_to_node)
-    for line_of_text in read_block_to_node:
-        if line_of_text != "\n":
-            brace_index = line_of_text.index("{")
-            # gets first number in curly braces
-            # REPLICATION_FACTOR must be 3 - BAD!!
-            if line_of_text[brace_index + 1] != "}":
-                print("Here1")
-                nodes[line_of_text.split()[1][1]] = nodes.get(line_of_text.split()[1][1], 0) + 1
-                if line_of_text[brace_index + 2] != "}":
-                    print("Here2")
-                    nodes[line_of_text.split()[2][0]] = nodes.get(line_of_text.split()[2][0], 0) + 1
-                    if line_of_text[brace_index + 5] != "}":
-                        print("Here3")
-                        nodes[line_of_text.split()[3][0]] = nodes.get(line_of_text.split()[3][0], 0) + 1
-    read_block_to_node.close()
+    nodes = make_node_dictionary()
 
     top_nodes = []
     for i in range(int(REPLICATION_FACTOR * num_blocks)):
-        if i % 3 == 0:
+        appended_node = False
+        if i % REPLICATION_FACTOR == 0:
             copy_index_min = i
             copy_index_max = i
-        open_node = min(nodes.keys(), key=(lambda k: nodes[k]))
-        if open_node not in top_nodes[copy_index_min:(copy_index_max + 1)]:
-            top_nodes.append(open_node)
-            copy_index_max = copy_index_max + 1
-        nodes[open_node] = nodes[open_node] + 1
+        while not appended_node:
+            open_node = min(nodes.keys(), key=(lambda k: nodes[k]))
+            if open_node not in top_nodes[copy_index_min:(copy_index_max + 1)]:
+                top_nodes.append(open_node)
+                copy_index_max = copy_index_max + 1
+                appended_node = True
+            nodes[open_node] = nodes[open_node] + 1
 
     return top_nodes
 
@@ -252,11 +239,48 @@ def delete_path(path):
     return success
 
 
-# def replication_check():
-#     my_file = open(block_to_node)
-#
-#     for line_of_text in my_file:
-#         current_path = line_of_text.split
+def replication_check():
+    nodes = dict()
+    read_block_to_node = open(block_to_node)
+
+    problem_lines = []
+    for line_of_text in read_block_to_node:
+        if line_of_text != "\n":
+            brace_index = line_of_text.index("{")
+            # gets first number in curly braces
+            # REPLICATION_FACTOR must be 3 - BAD!!
+            if line_of_text[brace_index + 1] != "}":
+                node_with_data = line_of_text[brace_index + 1]
+                if line_of_text[brace_index + 2] == "}":
+                    problem_lines.append((2, node_with_data))
+                elif line_of_text[brace_index + 5] == "}":
+                    problem_lines.append((1, node_with_data))
+    read_block_to_node.close()
+
+    for (num_missing, contact_node) in problem_lines:
+        forward_nodes = get_open_location(num_missing, 1)
+        # data_node.forward(contact_node, forward_nodes)
+    return
+
+
+
+def make_node_dictionary():
+    nodes = dict()
+    read_block_to_node = open(block_to_node)
+    for line_of_text in read_block_to_node:
+        if line_of_text != "\n":
+            brace_index = line_of_text.index("{")
+            # gets first number in curly braces
+            # REPLICATION_FACTOR must be 3 - BAD!!
+            if line_of_text[brace_index + 1] != "}":
+                nodes[line_of_text.split()[1][1]] = nodes.get(line_of_text.split()[1][1], 0) + 1
+                if line_of_text[brace_index + 2] != "}":
+                    nodes[line_of_text.split()[2][0]] = nodes.get(line_of_text.split()[2][0], 0) + 1
+                    if line_of_text[brace_index + 5] != "}":
+                        nodes[line_of_text.split()[3][0]] = nodes.get(line_of_text.split()[3][0], 0) + 1
+    read_block_to_node.close()
+    return nodes
+
 
 
 def main():
@@ -279,7 +303,7 @@ def main():
     """
     # print(make_file(128, "/Users/isabellebutterfield/test.txt"))
     # print(make_file(256, "/Users/isabellebutterfield/test2.txt"))
-    print(make_file(250, "/Users/isabellebutterfield/test4.txt"))
+    print(make_file(10, "/Users/isabellebutterfield/test6.txt"))
 
     ############################################################
 
