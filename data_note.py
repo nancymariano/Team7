@@ -1,68 +1,108 @@
 import os
 import rpyc
+import pickle
+from reply import Reply
 
-class DataNode(rpyc.Service):
-    class exposed_Block():
-        def exposed_open(self, filename, mode = 'r'):
-            print("Received call to store file: ", filename)
-            self.__filehandle = open(filename, mode)
-            self.__filename = filename
+NN_IP = ''
+PORT = ''
+MY_IP = ''
 
-        def exposed_write(self, bytes):
-            return self.__filehandle.write(bytes)
+class DataNodeService(rpyc.Service):
+    class exposed_BlockStore:
+        def __init__(self, file_name = 'persistent.dat'):
+            self.block_id = set()
+            self.name_map = file_name
+            self.load_node()
 
-        def exposed_close(self):
-            print("Closing file: ", self.__filename)
-            return self.__filehandle.close()
+        #load data node if previously started
+        def load_node(self):
+            print('Loading previous storage')
+            try:
+                with open(self.name_map, 'rb') as f:
+                    while True:
+                        try:
+                            self.block_id.add(pickle.load(f))
+                        except EOFError:
+                            break
+            except:
+                print('Could not load persistent data, creating new')
+                self.block_id = set()
+
+        #write block to block report
+        def save_block(self, id):
+            print('saving ', id)
+            with open(self.name_map, 'a+b') as f:
+                pickle.dump(id, f)
+            f.close()
+            self.block_id.add(id)
+            print('block report is', self.block_id)
+
+        def block_report(self):
+            blocks = []
+            with open(self.name_map, 'rb') as f:
+                while 1:
+                    try:
+                        blocks.append(pickle.load(f))
+                    except EOFError:
+                        break
+            print('printing block report')
+            print(blocks)
+            f.close()
+            return blocks
+
+        #save block to storage from client request
+        def exposed_put_block(self, file_name, data):
+            print('new file name', file_name)
+            if file_name in self.block_id:
+                return Reply.error('File name already exists')
+            #this is not right
+            else:
+                try:
+                    with open(file_name, 'wb') as f:
+                        f.write(data)
+                except:
+                    self.block_id.remove(id)
+                    return Reply.error('Error saving block')
+
+                self.save_block(file_name)
+                return Reply.reply()
+            #also need to replicate the block to other datanodes
+
+        def exposed_get_block(self, file_name):
+            if file_name in self.block_id:
+                with open(file_name, 'rb') as f:
+                    pickle.load(f)
+                return Reply.reply(f)
+            else:
+                return Reply.error('File not found')
 
 
-    # Precondition: file is not duplicated
-    # Postcondition: file is stored
-    # Function: accepts a data tranasfer from a client
-    def exposed_acceptWriteFromClient(self, b, path, destinations):
-        if os.path.isfile(b):
-            return "File name already exists"
-        else:
-            self.exposed_replicateBlock()
+        #delete a block
+        def exposed_delete_block(self, id):
+            if id in self.block_id:
+                self.block_id.remove(id)
+                return Reply.reply()
+            else:
+                return Reply.error('Block not found')
 
+        # Precondition:
+        # Postcondition: block report is sent
+        # Function: sends updates on what is being stored on the DataNode
+        def send_block_report(self, ip, path):
+            dir = os.listdir(path)
+            block_list = []
+            for path, dirs, files in os.walk(path):
+                for filename in files:
+                    block_list.append(filename)
+            c = rpyc.connect(NN_IP, PORT)
+            cmds = c.root.receive_block_report(MY_IP, block_list)
 
-    # Precondition:
-    # Postcondition: block report is sent
-    # Function: sends updates on what is being stored on the DataNode
-    def sendBlockReport(self, ip, path):
-        dir = os.listdir(path)
-        block_list = []
-        for path, dirs, files in os.walk(path):
-            for filename in files:
-                block_list.append(filename)
-        c = rpyc.connect(NN_IP, PORT)
-        cmds = c.root.receive_block_report(MY_IP, block_list)
-
-    # Precondition: request for a block is received from client
-    # Postcondition: block is sent to the client
-    # Function: a
-    def exposed_sendBlockToClient(self, path): #if client sends a request
-        return
-
-    # Precondition: block is received from client
-    # Postcondition: block is stored, confirmation is sent to client
-    # Function:
-    def storeBlock(self, file, path):
-        lines = file.read()
-        new_path = path + file
-        new_file = open(new_path, 'w')
-        new_file.write(lines)
-        new_file.close()
-        return
 
     # Precondition: request to delete a block is recvd from client
     # Postcondition: block is removed from storage, and confirmation is sent
     # Function:
     def exposed_deleteBlock(self, path):
-        if os.path.isfile(path):
-            os.remove(path)
-        else:
-            return("File doesn't exist")
+        pass
 
     # Precondition: a block is received from another DataNode
     # Postcondition: a block is forwarded to the next DataNode in the path
@@ -80,17 +120,9 @@ class DataNode(rpyc.Service):
         print("Received Message: " + message)
         return "got ur message thx"
 
-    #testing client info stuff... not useful
-    def exposed_get_conn_info(self):
-        s_ConnectionID = self._conn._config['connid']
-        s_Credentials = self._conn._config['credentials']
-        s_HostAdress, s_HostPort = self._conn._config['endpoints'][0]
-        s_ClientAdress, s_ClientPort = self._conn._config['endpoints'][1]
-        connList = [s_ConnectionID, s_Credentials, s_HostAdress, s_HostPort, s_ClientAdress, s_ClientPort]
-        return connList
 
 if __name__ == '__main__':
     from rpyc.utils.server import ThreadedServer
-    t = ThreadedServer(DataNode, port=5000)
+    t = ThreadedServer(DataNodeService, port=5000)
     t.start()
     #sendBlockReport(path)
