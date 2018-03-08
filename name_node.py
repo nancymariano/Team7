@@ -278,6 +278,11 @@ class NameNode(rpyc.Service):
                         if line_of_text[brace_index + 5] != "}":
                             nodes[line_of_text.split()[3][0]] = nodes.get(line_of_text.split()[3][0], 0) + 1
         read_block_to_node.close()
+
+        my_file = open(self.valid_nodes)
+        for line_of_text in my_file:
+            if line_of_text not in nodes.keys() & line_of_text != "\n":
+                nodes[line_of_text] = 0
         return nodes
 
 
