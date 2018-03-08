@@ -6,6 +6,8 @@ import shutil
 
 block_size = 2048
 data_node_IP = 'localhost'
+# when connecting to nodes on ec2 servers
+node_IPs = ['ip1', 'ip2']
 
 #create blocks from file
 def create_blocks(file_name):
@@ -19,7 +21,8 @@ def create_blocks(file_name):
 
 #sending a file over
 def send_block(file_name):
-    conn = rpyc.connect(data_node_IP, 5000, config={'allow_public_attrs': True})
+    # conn = rpyc.connect(data_node_IP, 5000, config={'allow_public_attrs': True})
+    conn = rpyc.connect(node_IPs[0], 5000, config={'allow_public_attrs': True})
     print("Connecting with server...")
 
     data_node = conn.root.BlockStore()
@@ -29,7 +32,7 @@ def send_block(file_name):
     for block in file_blocks:
         block_id = 'MobyBlock' + str(i)
         print("Now inserting: ", block_id)
-        reply = Reply.Load(data_node.put_block(block_id, block))
+        reply = Reply.Load(data_node.put_block(block_id, block, node_IPs))
         print(reply.status)
 
         if reply.is_err():
@@ -40,8 +43,7 @@ def send_block(file_name):
 
 #retrieve blocks and save blocks to a file
 def get_blocks(block_name, new_file_name):
-    conn = rpyc.connect(data_node_IP, 5000,
-                        config={'allow_public_attrs': True})
+    conn = rpyc.connect(data_node_IP, 5000, config={'allow_public_attrs': True})
     data_node = conn.root.BlockStore()
     print("Connecting with server...")
 
@@ -76,7 +78,7 @@ if __name__ == '__main__':
     #send blocks
     # print('Testing: save blocks in storage')
     # print('Sending Moby Dick...')
-    # send_block('mobydick.txt')
+    # send_block('test.txt')
     # print("Send complete")
 
     #retrieve block

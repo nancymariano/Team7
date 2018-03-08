@@ -9,7 +9,7 @@ MY_IP = ''
 
 class DataNodeService(rpyc.Service):
     class exposed_BlockStore:
-        def __init__(self, file_name = 'persistent.dat'):
+        def __init__(self, file_name='persistent.dat'):
             self.block_id = set()
             self.name_map = file_name
             self.load_node()
@@ -51,7 +51,7 @@ class DataNodeService(rpyc.Service):
             return blocks
 
         #save block to storage from client request
-        def exposed_put_block(self, file_name, data):
+        def exposed_put_block(self, file_name, data, replica_node_ids):
             print('new file name', file_name)
             if file_name in self.block_id:
                 return Reply.error('File name already exists')
@@ -65,8 +65,17 @@ class DataNodeService(rpyc.Service):
                     return Reply.error('Error saving block')
 
                 self.save_block(file_name)
+
+                # send out replicas
+                replica_node_ids.pop(0)
+                if len(replica_node_ids) > 0:
+                    print("Sending replica to ", replica_node_ids[0])
+                    c = rpyc.connect(replica_node_ids[0], 5000)
+                    next_node = c.root.BlockStore()
+                    reply = Reply.Load(next_node.put_block(file_name, data, replica_node_ids))
+                    print(reply.status)
+
                 return Reply.reply()
-            #also need to replicate the block to other datanodes
 
         def exposed_get_block(self, file_name):
             if file_name in self.block_id:
