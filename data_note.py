@@ -2,6 +2,7 @@ import os
 import rpyc
 import pickle
 from reply import Reply
+import time
 
 NN_IP = ''
 PORT = ''
@@ -69,11 +70,26 @@ class DataNodeService(rpyc.Service):
                 # send out replicas
                 replica_node_ids.pop(0)
                 if len(replica_node_ids) > 0:
+                    done = 1
+                    tries = 0
                     print("Sending replica to ", replica_node_ids[0])
-                    c = rpyc.connect(replica_node_ids[0], 5000)
-                    next_node = c.root.BlockStore()
-                    reply = Reply.Load(next_node.put_block(file_name, data, replica_node_ids))
-                    print(reply.status)
+                    while done == 1:
+                        c = rpyc.connect(replica_node_ids[0], 5000)
+                        next_node = c.root.BlockStore()
+                        reply = Reply.Load(next_node.put_block(file_name, data, replica_node_ids))
+                        print(reply.status)
+                        if reply.status == 0:
+                            print("replica sent!")
+                            done = 0
+                        else:
+                            print("node busy trying again")
+                            # wait 5 seconds and try again
+                            time.sleep(5)
+                            tries += 1
+                            if tries > 4:
+                                # after 4 tries give up
+                                print("could not send block replica")
+                                break
 
                 return Reply.reply()
 
