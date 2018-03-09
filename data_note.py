@@ -25,6 +25,7 @@ class DataNodeService(rpyc.Service):
                             self.block_id.add(pickle.load(f))
                         except EOFError:
                             break
+
             except:
                 print('Could not load persistent data, creating new')
                 self.block_id = set()
@@ -95,17 +96,18 @@ class DataNodeService(rpyc.Service):
 
         def exposed_get_block(self, file_name):
             if file_name in self.block_id:
-                with open(file_name, 'rb') as f:
-                    pickle.load(f)
-                return Reply.reply(f)
+                read_file = open(file_name, 'rb')
+                data = read_file.read()
+                read_file.close()
+                return Reply.reply(data)
             else:
                 return Reply.error('File not found')
-
 
         #delete a block
         def exposed_delete_block(self, id):
             if id in self.block_id:
                 self.block_id.remove(id)
+                os.remove(id)
                 return Reply.reply()
             else:
                 return Reply.error('Block not found')
@@ -144,7 +146,6 @@ class DataNodeService(rpyc.Service):
     def exposed_test(self, message):
         print("Received Message: " + message)
         return "got ur message thx"
-
 
 if __name__ == '__main__':
     from rpyc.utils.server import ThreadedServer

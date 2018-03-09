@@ -69,9 +69,21 @@ def get_blocks(block_name, new_file_name):
 def get_block_report():
     conn = rpyc.connect(data_node_IP, 5000,
                         config={'allow_public_attrs': True})
-    data_node = conn.root
+    data_node = conn.root.BlockStore()
     print("Connecting with server...")
 
+#test deletion of block
+def delete_block(block_name):
+    conn = rpyc.connect(data_node_IP, 5000,
+                        config={'allow_public_attrs': True})
+    data_node = conn.root.BlockStore()
+    reply = Reply.Load(data_node.delete_block(block_name))
+
+    if reply.is_err():
+        print('Could not delete block ', block_name)
+        print(reply.err)
+    else:
+        return
 
 if __name__ == '__main__':
     print()
@@ -86,6 +98,7 @@ if __name__ == '__main__':
     # get_blocks('MobyBlock1', 'MobyBlock1.txt')
     # print('Retrieval complete')
 
-    #print blocks
-
     #delete block
+    # print('Testing: deleting blocks')
+    # delete_block('MobyBlock1')
+    # print('Delete complete')
