@@ -17,10 +17,8 @@ class NameNode(rpyc.Service):
         # if invalid path, returns False, otherwise True
 
         # Truncates any appended "/"
-        directory_path_length = len(directory_path)
-        if directory_path[directory_path_length - 1] == "/":
-            directory_path = directory_path[0:directory_path_length - 1]
-            directory_path_length = directory_path_length - 1
+        if directory_path[-1] == "/":
+            directory_path = directory_path[0:-1]
 
         directory_level = len(directory_path.split("/"))
         directory_exists = False
@@ -34,7 +32,8 @@ class NameNode(rpyc.Service):
             if directory_path == current_path:
                 directory_exists = True
 
-            if ((directory_path + "/") == current_path[0:directory_path_length + 1]) \
+            # only including paths ONE directory level lower
+            if ((directory_path + "/") == current_path[0:len(directory_path) + 1]) \
                     & (path_level == (directory_level + 1)):
                 file_paths.append(current_path)
 
@@ -92,37 +91,40 @@ class NameNode(rpyc.Service):
         return_blocks = []
 
         if success:
-            write_block_to_node = open(self.block_to_node, "a+")
-            write_file_to_block = open(self.file_to_block, "a+")
-            write_file_to_block.write(file_path + ", {")
+            return self.write_assigned_blocks_to_file(num_blocks, return_blocks, file_path)
 
-            assign_nodes = self.get_open_location(num_blocks)
-            node_iterator = 0
+    def write_assigned_blocks_to_file(self, num_blocks, return_blocks, file_path):
+        write_block_to_node = open(self.block_to_node, "a+")
+        write_file_to_block = open(self.file_to_block, "a+")
+        write_file_to_block.write(file_path + ", {")
 
-            for i in range(int(num_blocks)):
-                partition = "part-" + str(i)
-                name = file_path + "/" + partition
-                return_blocks.append(name)
-                new_blocks = ""
+        assign_nodes = self.get_open_location(num_blocks)
+        node_iterator = 0
 
-                for j in range(self.replication_factor):
-                    if j == 0:
-                        new_blocks = new_blocks + assign_nodes[node_iterator]
-                        node_iterator = node_iterator + 1
-                    else:
-                        new_blocks = new_blocks + ", " + assign_nodes[node_iterator]
-                        node_iterator = node_iterator + 1
-                return_blocks.append("{" + new_blocks + "}")
+        for i in range(int(num_blocks)):
+            partition = "part-" + str(i)
+            name = file_path + "/" + partition
+            return_blocks.append(name)
+            new_blocks = ""
 
-                if i == 0:
-                    write_file_to_block.write(partition)
+            for j in range(self.replication_factor):
+                if j == 0:
+                    new_blocks = new_blocks + assign_nodes[node_iterator]
+                    node_iterator = node_iterator + 1
                 else:
-                    write_file_to_block.write(", " + partition)
-                write_block_to_node.write(name + ", {}\n")
+                    new_blocks = new_blocks + ", " + assign_nodes[node_iterator]
+                    node_iterator = node_iterator + 1
+            return_blocks.append("{" + new_blocks + "}")
 
-            write_file_to_block.write("}\n")
-            write_file_to_block.close()
-            write_block_to_node.close()
+            if i == 0:
+                write_file_to_block.write(partition)
+            else:
+                write_file_to_block.write(", " + partition)
+            write_block_to_node.write(name + ", {}\n")
+
+        write_file_to_block.write("}\n")
+        write_file_to_block.close()
+        write_block_to_node.close()
 
         return return_blocks
 
@@ -246,7 +248,7 @@ class NameNode(rpyc.Service):
                 brace_index = line_of_text.index("{")
                 block_name = line_of_text.split(",")[0]
                 # gets first number in curly braces
-                # REPLICATION_FACTOR must be 3 - BAD!!
+                # REPLICATION_FACTOR must be 3
                 if line_of_text[brace_index + 1] != "}":
                     node_with_data = line_of_text[brace_index + 1]
                     if line_of_text[brace_index + 2] == "}":
@@ -281,7 +283,7 @@ class NameNode(rpyc.Service):
 
         my_file = open(self.valid_nodes)
         for line_of_text in my_file:
-            if line_of_text not in nodes.keys() & line_of_text != "\n":
+            if (line_of_text not in nodes.keys()) & (line_of_text != "\n"):
                 nodes[line_of_text] = 0
         return nodes
 
