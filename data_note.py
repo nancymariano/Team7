@@ -3,10 +3,19 @@ import rpyc
 import pickle
 from reply import Reply
 import time
+import boto
 
+#namenode information
 NN_IP = ''
 PORT = ''
 MY_IP = ''
+
+#ec2 information
+ACCESS_KEY = ''
+SECRET_KEY = ''
+AMI_ID = ''
+SECUR_GROUP = ''
+
 
 class DataNodeService(rpyc.Service):
     class exposed_BlockStore:
@@ -14,6 +23,7 @@ class DataNodeService(rpyc.Service):
             self.block_id = set()
             self.name_map = file_name
             self.load_node()
+            self.connect_to_aws()
 
         #load data node if previously started
         def load_node(self):
@@ -30,6 +40,11 @@ class DataNodeService(rpyc.Service):
                 print('Could not load persistent data, creating new')
                 self.block_id = set()
 
+        def connect_to_aws(self):
+            self.conn = boto.ec2.connect_to_region('us-west-2',
+                                              aws_access_key_id=ACCESS_KEY,
+                                              aws_secret_acces_key=SECRET_KEY)
+
         #write block to block report
         def save_block(self, id):
             print('saving ', id)
@@ -39,6 +54,7 @@ class DataNodeService(rpyc.Service):
             self.block_id.add(id)
             print('block report is', self.block_id)
 
+        #creates a list of block_ids
         def block_report(self):
             blocks = []
             with open(self.name_map, 'rb') as f:
@@ -47,9 +63,9 @@ class DataNodeService(rpyc.Service):
                         blocks.append(pickle.load(f))
                     except EOFError:
                         break
+            f.close()
             print('printing block report')
             print(blocks)
-            f.close()
             return blocks
 
         #save block to storage from client request
@@ -57,7 +73,6 @@ class DataNodeService(rpyc.Service):
             print('new file name', file_name)
             if file_name in self.block_id:
                 return Reply.error('File name already exists')
-            #this is not right
             else:
                 try:
                     with open(file_name, 'wb') as f:
@@ -94,6 +109,7 @@ class DataNodeService(rpyc.Service):
 
                 return Reply.reply()
 
+        #retrieve a block, given a block name
         def exposed_get_block(self, file_name):
             if file_name in self.block_id:
                 read_file = open(file_name, 'rb')
@@ -103,7 +119,7 @@ class DataNodeService(rpyc.Service):
             else:
                 return Reply.error('File not found')
 
-        #delete a block
+        #delete a block, given a block name
         def exposed_delete_block(self, id):
             if id in self.block_id:
                 self.block_id.remove(id)
@@ -124,28 +140,20 @@ class DataNodeService(rpyc.Service):
             c = rpyc.connect(NN_IP, PORT)
             cmds = c.root.receive_block_report(MY_IP, block_list)
 
+        #start a new data node by creating a block device mapping
+        #and then running an instance
+        def exposed_replicate_node(self):
+            block_dev = boto.ec2.blockdevicemapping.EBSBlockDeviceType()
+            block_dev.size = 8 #size in GB
+            bdm = boto.ec2.blockdevicemapping.BlockDeviceMapping()
+            bdm['/dev/sda1'] = block_dev
 
-    # Precondition: request to delete a block is recvd from client
-    # Postcondition: block is removed from storage, and confirmation is sent
-    # Function:
-    def exposed_deleteBlock(self, path):
-        pass
-
-    # Precondition: a block is received from another DataNode
-    # Postcondition: a block is forwarded to the next DataNode in the path
-    # Function:
-    def exposed_replicateBlock(self, file, path, destinations):
-        self.storeBlock(file, path)
-        destinations = destinations[1:]
-        if len(destinations) > 0:
-            c = rpyc.connect(destinations[0], 5000)
-            c.root.replicateBlock(file, path, destinations)
-        return
-
-
-    def exposed_test(self, message):
-        print("Received Message: " + message)
-        return "got ur message thx"
+            new_inst = self.conn.run_instances(image_id=AMI_ID,
+                                         key_name='name',
+                                         instance_type='t2.micro',
+                                         security_groups=SECUR_GROUP)
+            #and then call this file in that instance... yeah
+            pass
 
 if __name__ == '__main__':
     from rpyc.utils.server import ThreadedServer
