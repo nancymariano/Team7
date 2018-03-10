@@ -155,6 +155,11 @@ class DataNodeService(rpyc.Service):
             #and then call this file in that instance... yeah
             pass
 
+
+    def exposed_test(self, message):
+        print("Received Message: " + message)
+        return "got ur message thx"
+
 if __name__ == '__main__':
     from rpyc.utils.server import ThreadedServer
     t = ThreadedServer(DataNodeService, port=5000)
