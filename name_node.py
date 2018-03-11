@@ -311,23 +311,19 @@ class NameNode(rpyc.Service):
         read_block_to_node = open(self.block_to_node)
 
         problem_lines = []
-        for line_of_text in read_block_to_node:
+                for line_of_text in read_block_to_node:
             if line_of_text != "\n":
                 node_list = line_of_text.split("{")[1]
                 node_list = node_list.split("}")[0]
-                node_list = node_list.split(",")
-                if (len(node_list) < self.replication_factor) & len(node_list):
-                    problem_lines.append()
-                # brace_index = line_of_text.index("{")
-                # block_name = line_of_text.split(",")[0]
-                # gets first number in curly braces
-                # REPLICATION_FACTOR must be 3
-                # if line_of_text[brace_index + 1] != "}":
-                    # node_with_data = line_of_text[brace_index + 1]
-                    # if line_of_text[brace_index + 2] == "}":
-                        # problem_lines.append((2, node_with_data, block_name))
-                    # elif line_of_text[brace_index + 5] == "}":
-                        # problem_lines.append((1, node_with_data, block_name))
+                if len(node_list) > 0:
+                    node_list = node_list.split(",")
+                    block_name = line_of_text.split(",")[0]
+                    num_replicas = len(node_list)
+                    node_with_data = node_list[0]
+                    if num_replicas == 1:
+                        problem_lines.append((2, node_with_data, block_name))
+                    elif num_replicas == 2:
+                        problem_lines.append((1, node_with_data, block_name))
         read_block_to_node.close()
 
         my_file = open(self.maintenance_needed, "a+")
