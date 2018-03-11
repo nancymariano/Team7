@@ -24,7 +24,7 @@ class DataNodeService(rpyc.Service):
             self.block_id = set()
             self.name_map = file_name
             self.load_node()
-            self.block_report_timer()
+            #self.block_report_timer()
 
         #load data node if previously started
         def load_node(self):
@@ -86,8 +86,7 @@ class DataNodeService(rpyc.Service):
                     reply = Reply.Load(next_node.put_block(path, self.exposed_get_block(path), [dest]))
                     print(reply.status)
                 else:
-                    # delete everything
-
+                    self.exposed_delete_all()
 
         #save block to storage from client request
         def exposed_put_block(self, file_name, data, replica_node_ids):
@@ -148,7 +147,20 @@ class DataNodeService(rpyc.Service):
             else:
                 return Reply.error('Block not found')
 
-
+        #deletes all blocks in storage
+        def exposed_delete_all(self):
+            blocks = []
+            print("sending block report!!")
+            with open(self.name_map, 'rb') as f:
+                while 1:
+                    try:
+                        blocks.append(pickle.load(f))
+                    except EOFError:
+                        break
+            f.close()
+            for b in blocks:
+                self.block_id.remove(b)
+                os.remove(b)
 
         #start a new data node by creating a block device mapping
         #and then running an instance
@@ -167,13 +179,9 @@ class DataNodeService(rpyc.Service):
             #TODO: create an image and then call this file in the instance
             pass
 
-        #fcn for parsing name node responses to block reports
-        def exposed_parse_cmds(commands):
-            pass
-
 if __name__ == '__main__':
     from rpyc.utils.server import ThreadedServer
     bs = DataNodeService.exposed_BlockStore()
-    bs.block_report_timer()
+    #bs.block_report_timer()
     t = ThreadedServer(DataNodeService, port=5000)
     t.start()
