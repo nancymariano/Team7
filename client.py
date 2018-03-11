@@ -2,6 +2,22 @@
 
 import socket
 import click
+import re
+import rpyc 
+import pickle 
+
+
+from boto.s3.connection import S3Connection
+from boto.s3.key import Key
+from reply import Reply 
+from io import BytesIO 
+import boto
+import os 
+
+file_pattern = re.compile('^\\(.+\\)*(.+)\.(.+)$')
+block_size = 128 
+data_node_IP = '' 
+node_IPs = ['ip1','ip2']
 
 @click.group()
 def cli():
@@ -17,23 +33,53 @@ def help(ctx, topic,**kw):
     click.echo(cli.commands[topic].get_help(ctx))    
 
 #create will allow the user to create a file 
-#it will ask the NameNode for where to place the file 
-#it will then partition the file into 128MB blocks
-#it will then send each file to the DataNode for storage
 #it will then tell the user if it was not successful  
 @cli.command('create')
 @click.argument('s3_obj', 'to_path', default=None, required=False, nargs=2)
 @click.pass_context
-def make_file(s3_obj):
+def make_file(s3_obj, to_path):
+    #user will need to make their file publically accessible for the scope of assignment 
+    s3_client = boto.connect_s3()
+    m = file_pattern.match(to_path) 
+    file_name= m.group() 
+    s3_client.download_file('s3_obj', 'file_name', 'client_file')
+
+    name_conn = rpyc.connect(name_node_IP, 5000, config = {'allow_public_attrs': True})
+    name_node = name_conn.root.BlockStore()
+
+    name_reply = Reply.Load(name_node.make_file(os.stat(client_file), to_path))
+    
+    block_locations = name_reply.result
+
+    send_blocks = [] 
+    j = 0 
+    with open(file_name, 'rb') as input: 
+        bytes = input.read() 
+        for i in range(0,len(bytes), block_size): 
+            send_blocks.append((block_locations[j[1]], bytes[i: i+block_size]))
+            j+=1 
+
+    data_conn = rpyc.connect(data_node_IP, 5000, config = {'allow_public_attrs': True})
+    data_node = data_conn.root.BlockStore() 
+
+    for block in send_blocks: 
+        data_reply = Reply.Load(data_node.put_block(block(0), block(1),node_IPs))
+        print(data_reply.status)
+
 
 #delete will allow the user to delete a file given a full file path 
-#it will ask NameNode to delete
-#it will then tell the user if the delete was unsuccessful
-#if the file does not exist, it will tell the user
 @cli.command('delete')
 @click.argument('path', default=None, required=False, nargs=1)
 @click.pass_context
 def delete_file(path):
+    name_conn = rpyc.connect(name_node_IP, 5000, config = {'allow_public_attrs': True})
+    name_node = name_conn.root.BlockStore()
+
+    name_reply = Reply.Load(name_node.delete_path(path))
+    
+    delete_result = name_reply.result
+    if (delete_result.status != 1): 
+        print("error deleting file")
 
 
 #delete will allow the user to read a file given a full file path 
@@ -44,7 +90,23 @@ def delete_file(path):
 @click.argument('path', default=None, required=False, nargs=1)
 @click.pass_context
 def read_file(path):
+    name_conn = rpyc.connect(name_node_IP, 5000, config = {'allow_public_attrs': True})
+    name_node = name_conn.root.BlockStore()
 
+    block_locations = []
+    name_reply = Reply.Load(name_node.read_file(path, block_locations))
+
+    data_conn = rpyc.connect(data_node_IP, 5000, config = {'allow_public_attrs': True})
+    data_node = data_conn.root.BlockStore() 
+    
+    with open(client_file, 'wb') as output: 
+        for block in block_locations:
+             data_reply = Reply.Load(data_node.get_block(block))
+             if not data_reply.error:
+                 client_file.write(data_reply.result)
+
+    return client_file
+    
 #mkdir will allow the user to make a directory in SUFS
 #it will ask the NameNode to create the path 
 #the user will be notified if the path could not be created
@@ -52,6 +114,15 @@ def read_file(path):
 @click.argument('path', default=None, required=False, nargs=1)
 @click.pass_context
 def make_dir(file_name):
+    name_conn = rpyc.connect(name_node_IP, 5000, config = {'allow_public_attrs': True})
+    name_node = name_conn.root.BlockStore()
+
+    name_reply = Reply.Load(name_node.create_directory(path))
+
+    if not name_reply.result:
+        print("Could not make directory") 
+        
+
 
 #rmdir will allow the user to remove a directory in SUFS if it is empty 
 #it will ask the NameNode to delete the path 
@@ -60,6 +131,13 @@ def make_dir(file_name):
 @click.argument('file_name', default=None, required=False, nargs=1)
 @click.pass_context
 def delete_dir(file_name):
+    name_conn = rpyc.connect(name_node_IP, 5000, config = {'allow_public_attrs': True})
+    name_node = name_conn.root.BlockStore()
+
+    name_reply = Reply.Load(name_node.delete_path(path))
+
+    if not name_reply.result:
+        print("Could not remove directory")
 
 #lsdir will allow the user to list the contents of a directory if it exists 
 #it will ask the NameNode for the names of the contents in the directory 
@@ -68,6 +146,17 @@ def delete_dir(file_name):
 @click.argument('path', default=None, required=False, nargs=1)
 @click.pass_context
 def list_dir(path):
+    name_conn = rpyc.connect(name_node_IP, 5000, config = {'allow_public_attrs': True})
+    name_node = name_conn.root.BlockStore()
+
+    content_names = [] 
+    name_reply = Reply.Load(name_node.list_directory(path, content_names))
+
+    if not name_reply.result: 
+        for name in content names: 
+            print(name)
+    else: 
+        print("Could not list directory contents")
 
 #lsdata will allow the user to list the data blocks of a file given a file path  
 #it will ask the NameNode for the data blocks which store the contents of the file  
@@ -76,3 +165,14 @@ def list_dir(path):
 @click.argument('file_path', default=None, required=False, nargs=1)
 @click.pass_context
 def list_data_nodes(file_path):
+    name_conn = rpyc.connect(name_node_IP, 5000, config = {'allow_public_attrs': True})
+    name_node = name_conn.root.BlockStore()
+
+    block_locations = []
+    name_reply = Reply.Load(name_node.read_file(path, block_locations))
+
+    if not name_reply.error:
+        for block in block_locations: 
+            print(block[1])
+    else: 
+        print("Data blocks could not be listed")
