@@ -174,7 +174,7 @@ class NameNode(rpyc.Service):
                     block_list.append(new_block)
         block_file.close()
         node_file = open(self.block_to_node, 'r')
-        for x in block_list:
+        for current_block in block_list:
             for each_line in node_file:
                 current_block = each_line.split(",")[0]  # incorrect syntax
                 if x == current_block:
