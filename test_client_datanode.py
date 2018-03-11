@@ -85,6 +85,13 @@ def delete_block(block_name):
     else:
         return
 
+#test creation of new data node (called from name node)
+def create_data_node():
+    conn = rpyc.connect(data_node_IP, 5000,
+                        config={'allow_public_attrs': True})
+    data_node = conn.root.BlockStore()
+    data_node.replicate_node()
+
 if __name__ == '__main__':
     print()
     #send blocks
@@ -102,3 +109,8 @@ if __name__ == '__main__':
     # print('Testing: deleting blocks')
     # delete_block('MobyBlock1')
     # print('Delete complete')
+
+    #create new node
+    # print('Create new node')
+    # create_data_node()
+    # print('Instance created')

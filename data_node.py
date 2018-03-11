@@ -3,7 +3,8 @@ import rpyc
 import pickle
 from reply import Reply
 import time
-import boto
+import boto.ec2
+import boto3
 
 #namenode information
 NN_IP = ''
@@ -23,7 +24,6 @@ class DataNodeService(rpyc.Service):
             self.block_id = set()
             self.name_map = file_name
             self.load_node()
-            self.connect_to_aws()
 
         #load data node if previously started
         def load_node(self):
@@ -35,15 +35,9 @@ class DataNodeService(rpyc.Service):
                             self.block_id.add(pickle.load(f))
                         except EOFError:
                             break
-
             except:
                 print('Could not load persistent data, creating new')
                 self.block_id = set()
-
-        def connect_to_aws(self):
-            self.conn = boto.ec2.connect_to_region('us-west-2',
-                                              aws_access_key_id=ACCESS_KEY,
-                                              aws_secret_acces_key=SECRET_KEY)
 
         #write block to block report
         def save_block(self, id):
@@ -143,22 +137,23 @@ class DataNodeService(rpyc.Service):
         #start a new data node by creating a block device mapping
         #and then running an instance
         def exposed_replicate_node(self):
-            block_dev = boto.ec2.blockdevicemapping.EBSBlockDeviceType()
-            block_dev.size = 8 #size in GB
-            bdm = boto.ec2.blockdevicemapping.BlockDeviceMapping()
-            bdm['/dev/sda1'] = block_dev
-
-            new_inst = self.conn.run_instances(image_id=AMI_ID,
-                                         key_name='name',
-                                         instance_type='t2.micro',
-                                         security_groups=SECUR_GROUP)
-            #and then call this file in that instance... yeah
+            ec2 = boto3.resource('ec2', region_name='us-west-2',
+                                 aws_access_key_id=ACCESS_KEY,
+                                 aws_secret_access_key=SECRET_KEY)
+            new_instance = ec2.create_instances(ImageId=AMI_ID,
+                                                InstanceType='t1.micro',
+                                                MinCount=1, MaxCount=1,
+                                                SecurityGroups=[SECUR_GROUP],
+                                                IamInstanceProfile={'Name' :
+                                                                    'newDataNode'})
+            instance_id = new_instance[0]
+            print('Created new instance: ', instance_id.public_ip_address)
+            #TODO: create an image and then call this file in the instance
             pass
 
-
-    def exposed_test(self, message):
-        print("Received Message: " + message)
-        return "got ur message thx"
+        #fcn for parsing name node responses to block reports
+        def exposed_parse_cmds(commands):
+            pass
 
 if __name__ == '__main__':
     from rpyc.utils.server import ThreadedServer
