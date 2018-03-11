@@ -3,20 +3,12 @@ import rpyc
 import pickle
 from reply import Reply
 import time
-import boto3
 import threading
 
 #namenode information
 NN_IP = '35.167.176.87'
-PORT = ''
+PORT = '5000'
 MY_IP = ''
-
-#ec2 information
-ACCESS_KEY = ''
-SECRET_KEY = ''
-AMI_ID = ''
-SECUR_GROUP = ''
-
 
 class DataNodeService(rpyc.Service):
     class exposed_BlockStore:
@@ -148,7 +140,7 @@ class DataNodeService(rpyc.Service):
                 return Reply.error('Block not found')
 
         #deletes all blocks in storage
-        def exposed_delete_all(self):
+        def delete_all(self):
             blocks = []
             print("sending block report!!")
             with open(self.name_map, 'rb') as f:
@@ -162,26 +154,9 @@ class DataNodeService(rpyc.Service):
                 self.block_id.remove(b)
                 os.remove(b)
 
-        #start a new data node by creating a block device mapping
-        #and then running an instance
-        def exposed_replicate_node(self):
-            ec2 = boto3.resource('ec2', region_name='us-west-2',
-                                 aws_access_key_id=ACCESS_KEY,
-                                 aws_secret_access_key=SECRET_KEY)
-            new_instance = ec2.create_instances(ImageId=AMI_ID,
-                                                InstanceType='t1.micro',
-                                                MinCount=1, MaxCount=1,
-                                                SecurityGroups=[SECUR_GROUP],
-                                                IamInstanceProfile={'Name' :
-                                                                    'newDataNode'})
-            instance_id = new_instance[0]
-            print('Created new instance: ', instance_id.public_ip_address)
-            #TODO: create an image and then call this file in the instance
-            pass
-
 if __name__ == '__main__':
     from rpyc.utils.server import ThreadedServer
     bs = DataNodeService.exposed_BlockStore()
-    #bs.block_report_timer()
+    bs.block_report_timer()
     t = ThreadedServer(DataNodeService, port=5000)
     t.start()
