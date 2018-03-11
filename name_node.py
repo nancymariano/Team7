@@ -247,15 +247,33 @@ class NameNode(rpyc.Service):
         return
         
             
-    def dead_node(node_id):
-        my_file = open(self.valid_nodes, 'r')
-        lines = my_file.readlines()
-        my_file.close()
-        my_file = open(self.valid_nodes, 'w')
-        for each_line in lines:
-            if not(each_line == str(node_id)):
-                my_file.write(each_line) 
-        return
+def dead_node(node_id):
+    my_file = open(self.valid_nodes, 'r')
+    lines = my_file.readlines()
+    my_file.close()
+    my_file = open(self.valid_nodes, 'w')
+    for each_line in lines:
+        if not (each_line == str(node_id)):
+            my_file.write(each_line)
+    my_file.close()
+    my_file = open(self.block_to_nodes, 'r')
+    lines = my_file.readlines()
+    my_file.close()
+    my_file = open(self.block_to_nodes, "w")
+    for each_line in lines:
+        node_list = each_line.split("{")[1]
+        node_list = node_list.split("}")[0]
+        node_list = node_list.split(",")
+        if node_id in node_list:
+            new_line = each_line.split("{")[0] + "{"
+            for node in node_list:
+                if not (node == node_id):
+                    new_line = new_line + node + ","
+            new_line = new_line + "}"
+            my_file.write(new_line)
+        else:
+            my_file.write(each_line)
+    return
 
     def find_all_files(self, path):
         in_path = path
