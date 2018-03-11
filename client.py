@@ -14,6 +14,12 @@ from io import BytesIO
 import boto
 import os 
 
+ACCESS_KEY = ''
+SECRET_KEY = ''
+bucket_name = ''
+conn = S3Connection(ACCESS_KEY, SECRET_KEY)
+bucket = conn.get_bucket(bucket_name)
+
 file_pattern = re.compile('^\\(.+\\)*(.+)\.(.+)$')
 block_size = 128 
 data_node_IP = '' 
@@ -56,7 +62,7 @@ def make_file(s3_obj, to_path):
     with open(file_name, 'rb') as input: 
         bytes = input.read() 
         for i in range(0,len(bytes), block_size): 
-            send_blocks.append((block_locations[j[1]], bytes[i: i+block_size]))
+            send_blocks.append((block_locations[j], bytes[i: i+block_size]))
             j+=1 
 
     data_conn = rpyc.connect(data_node_IP, 5000, config = {'allow_public_attrs': True})
@@ -90,6 +96,9 @@ def delete_file(path):
 @click.argument('path', default=None, required=False, nargs=1)
 @click.pass_context
 def read_file(path):
+    m = file_pattern.match(to_path) 
+    file_name= m.group() 
+
     name_conn = rpyc.connect(name_node_IP, 5000, config = {'allow_public_attrs': True})
     name_node = name_conn.root.BlockStore()
 
@@ -99,11 +108,11 @@ def read_file(path):
     data_conn = rpyc.connect(data_node_IP, 5000, config = {'allow_public_attrs': True})
     data_node = data_conn.root.BlockStore() 
     
-    with open(client_file, 'wb') as output: 
+    with open(file_name, 'a') as output: 
         for block in block_locations:
              data_reply = Reply.Load(data_node.get_block(block))
              if not data_reply.error:
-                 client_file.write(data_reply.result)
+                 client_file.append(data_reply.result)
 
     return client_file
     
