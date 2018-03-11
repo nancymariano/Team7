@@ -3,11 +3,11 @@ import rpyc
 import pickle
 from reply import Reply
 import time
-import boto.ec2
 import boto3
+import threading
 
 #namenode information
-NN_IP = ''
+NN_IP = '35.167.176.87'
 PORT = ''
 MY_IP = ''
 
@@ -24,6 +24,7 @@ class DataNodeService(rpyc.Service):
             self.block_id = set()
             self.name_map = file_name
             self.load_node()
+            self.block_report_timer()
 
         #load data node if previously started
         def load_node(self):
@@ -48,9 +49,14 @@ class DataNodeService(rpyc.Service):
             self.block_id.add(id)
             print('block report is', self.block_id)
 
+        def block_report_timer(self):
+            threading.Timer(60.0, self.block_report_timer).start()
+            self.block_report()
+
         #creates a list of block_ids
         def block_report(self):
             blocks = []
+            print("sending block report!!")
             with open(self.name_map, 'rb') as f:
                 while 1:
                     try:
@@ -60,6 +66,9 @@ class DataNodeService(rpyc.Service):
             f.close()
             print('printing block report')
             print(blocks)
+            c = rpyc.connect(NN_IP, PORT)
+            cmds = c.root.receive_block_report(MY_IP, blocks)
+
             return blocks
 
         #save block to storage from client request
@@ -122,17 +131,7 @@ class DataNodeService(rpyc.Service):
             else:
                 return Reply.error('Block not found')
 
-        # Precondition:
-        # Postcondition: block report is sent
-        # Function: sends updates on what is being stored on the DataNode
-        def send_block_report(self, ip, path):
-            dir = os.listdir(path)
-            block_list = []
-            for path, dirs, files in os.walk(path):
-                for filename in files:
-                    block_list.append(filename)
-            c = rpyc.connect(NN_IP, PORT)
-            cmds = c.root.receive_block_report(MY_IP, block_list)
+
 
         #start a new data node by creating a block device mapping
         #and then running an instance
@@ -157,6 +156,7 @@ class DataNodeService(rpyc.Service):
 
 if __name__ == '__main__':
     from rpyc.utils.server import ThreadedServer
+    bs = DataNodeService.exposed_BlockStore()
+    bs.block_report_timer()
     t = ThreadedServer(DataNodeService, port=5000)
     t.start()
-    #sendBlockReport(path)
