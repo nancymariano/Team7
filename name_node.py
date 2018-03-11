@@ -18,7 +18,6 @@ class NameNode(rpyc.Service):
         my_file = open(self.maintenance_needed, 'w')
         my_file.close()
 
-
         self.replication_factor = 3
         self.block_size = 128
 
