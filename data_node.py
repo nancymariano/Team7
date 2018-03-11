@@ -71,11 +71,11 @@ class DataNodeService(rpyc.Service):
             while len(cmds) > 0:
                 cmd = cmds.pop(0)
                 if cmd == "delete":
-                    path = cmd.pop(0)
+                    path = cmds.pop(0)
                     self.exposed_delete_block(path)
                 elif cmd == "forward":
-                    path = cmd.pop(0)
-                    dest = cmd.pop(0)
+                    path = cmds.pop(0)
+                    dest = cmds.pop(0)
                     c = rpyc.connect(dest, 5000)
                     next_node = c.root.BlockStore()
                     reply = Reply.Load(next_node.put_block(path, self.exposed_get_block(path), [dest]))
@@ -160,7 +160,6 @@ class DataNodeService(rpyc.Service):
 if __name__ == '__main__':
     from rpyc.utils.server import ThreadedServer
     bs = DataNodeService.exposed_BlockStore()
-    bs.__init__()
     bs.block_report_timer()
     t = ThreadedServer(DataNodeService, port=5000)
     t.start()
