@@ -20,6 +20,8 @@ class NameNode(rpyc.Service):
 
         self.replication_factor = 3
         self.block_size = 128
+        self.default_time = 10
+        self.heart_dict = {}
 
     def list_directory(self, directory_path, file_paths):
         # Adds string file paths to given file_path empty set;
@@ -162,7 +164,7 @@ class NameNode(rpyc.Service):
         file_list = self.find_all_files(path)
         if not file_list:
             return 0
-        block_file = open("file_to_block.txt", 'r')
+        block_file = open(self.file_to_block, 'r')
         block_list = []
         for each_line in block_file:
             items = each_line.split(",")
@@ -171,7 +173,7 @@ class NameNode(rpyc.Service):
                     new_block = path + "/" + block
                     block_list.append(new_block)
         block_file.close()
-        node_file = open("block_to_node.txt", 'r')
+        node_file = open(self.block_to_node, 'r')
         for x in block_list:
             for each_line in node_file:
                 current_block = each_line.split(",")[0]  # incorrect syntax
@@ -180,27 +182,84 @@ class NameNode(rpyc.Service):
         node_file.close()
         return 1
 
-    def receive_block_report(self, block_list, node_id):
-        my_file = open("block_to_node.txt", 'r')
+    def receive_block_report(self, node_id, block_list):
+        response = ""
+        node_id = str(node_id)
+        my_file = open(self.valid_node, 'r')
+        lines = my_file.readlines()
+        if not (node_id in lines):
+            new_node(node_id)
+            response = "delete,*"
+        heart_dict[node_id] = self.default_time
+        my_file = open(self.maintenance_needed, 'r')
         lines = my_file.readlines()
         my_file.close()
-        my_file = open("block_to_node.txt", 'w')
+        my_file = open(self.maintenance_needed, 'w')
         for each_line in lines:
             line_breakdown = each_line.split(",")
-            if line_breakdown[0] in block_list:
-                if node_id not in line_breakdown:
-                    my_file.write(each_line + node_id + ",")  # incorrect syntax
-                else:
-                    my_file.write(each_line)
+            if line_breakdown[0] == node_id:
+                response = response + "forward," + line_breakdown[1] + "," + line_breakdown[2]
             else:
                 my_file.write(each_line)
+        for block in block_list:
+            found = 0
+            my_file = open(self.block_to_node, 'r')
+            lines = my_file.realines()
+            my_file.close()
+            my_file = open(self.block_to_node, 'w')
+            for each_line in lines:
+                if (each_line.split(",")[0] == block):
+                    found = 1
+                    node_list = each_line.split("{")[1]
+                    node_list = node_list.split("}")[0]
+                    node_list = node_list.split(",")
+                    if not (node_id in node_list):
+                        new_line = each_line.split("{")[0]
+                        for node in node_list:
+                            new_line = new_line + node + ","
+                        new_line = new_line + node_id + ",}"
+                    my_file.write(each_line)
+                else:
+                    my_file.write(each_line)
+            if found == 0:
+                response = response + "delete," + block + ","
+            my_file.close()
+        return response
+    
+    def new_node(node_id):
+        my_file = open(self.valid_nodes, 'r')
+        lines = my_file.readlines()
+        if node_id in lines:
+            return 0
+        my_file = open(self.valid_nodes, 'a')
+        my_file.write(node_id)
         my_file.close()
-        success = 1
-        return success
+        self.heart_dict[node_id] = self.default_time
+        return 1
+    
+    def heart_check():
+        for node, value in self.heart_dict.items():
+             value = value - 1
+             self.heart_dict[node] = value
+             if value == 0:
+                 dead_node(node)
+                 del self.heart_dict[node]
+        return
+        
+            
+    def dead_node(node_id):
+        my_file = open(self.valid_nodes, 'r')
+        lines = my_file.readlines()
+        my_file.close()
+        my_file = open(self.valid_nodes, 'w')
+        for each_line in lines:
+            if not(each_line == str(node_id)):
+                my_file.write(each_line) 
+        return
 
     def find_all_files(self, path):
         in_path = path
-        my_file = open("file_to_block.txt", 'r')
+        my_file = open(self.file_to_block, 'r')
         file_list = []
         path_length = len(in_path)
         if in_path[path_length - 1] == "/":
@@ -224,10 +283,10 @@ class NameNode(rpyc.Service):
         if not file_list:
             success = 0
             return success
-        my_file = open("file_to_block.txt", 'r')
+        my_file = open(self.file_to_block, 'r')
         lines = my_file.readlines()
         my_file.close()
-        my_file = open("file_to_block.txt", 'w')
+        my_file = open(self.file_to_block, 'w')
         block_list = []
         for each_line in lines:
             if each_line.split(",")[0] in file_list:
@@ -235,14 +294,14 @@ class NameNode(rpyc.Service):
             else:
                 my_file.write(each_line)
         my_file.close()
-        if block_list:
-            #  modify block_list to list blocks
-            my_file = open("block_to_node.txt", 'r')
+        if block_list
+            my_file = open(self.block_to_node, 'r')
             lines = my_file.readlines()
             my_file.close()
-            my_file = open("block_to_node.txt", 'w')
+            my_file = open(self.block_to_node, 'w')
             for each_line in lines:
-                if each_line.split(",")[0] not in block_list:
+                block = each_line.split(",")[0]
+                if not (block.startswith(path)):
                     my_file.write(each_line)
             my_file.close()
         success = 1
@@ -254,22 +313,27 @@ class NameNode(rpyc.Service):
         problem_lines = []
         for line_of_text in read_block_to_node:
             if line_of_text != "\n":
-                brace_index = line_of_text.index("{")
-                block_name = line_of_text.split(",")[0]
+                node_list = line_of_text.split("{")[1]
+                node_list = node_list.split("}")[0]
+                node_list = node_list.split(",")
+                if (len(node_list) < self.replication_factor) & len(node_list):
+                    problem_lines.append()
+                # brace_index = line_of_text.index("{")
+                # block_name = line_of_text.split(",")[0]
                 # gets first number in curly braces
                 # REPLICATION_FACTOR must be 3
-                if line_of_text[brace_index + 1] != "}":
-                    node_with_data = line_of_text[brace_index + 1]
-                    if line_of_text[brace_index + 2] == "}":
-                        problem_lines.append((2, node_with_data, block_name))
-                    elif line_of_text[brace_index + 5] == "}":
-                        problem_lines.append((1, node_with_data, block_name))
+                # if line_of_text[brace_index + 1] != "}":
+                    # node_with_data = line_of_text[brace_index + 1]
+                    # if line_of_text[brace_index + 2] == "}":
+                        # problem_lines.append((2, node_with_data, block_name))
+                    # elif line_of_text[brace_index + 5] == "}":
+                        # problem_lines.append((1, node_with_data, block_name))
         read_block_to_node.close()
 
         my_file = open(self.maintenance_needed, "a+")
         for (num_missing, contact_node, block) in problem_lines:
             forward_nodes = self.get_open_location(float(num_missing) / self.replication_factor)
-            my_file.write(str(contact_node) + ", " + block + ", " + str(forward_nodes) + "\n")
+            my_file.write(str(contact_node) + "," + block + "," + str(forward_nodes) + "\n")
 
         my_file.close()
         return
