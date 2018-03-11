@@ -67,9 +67,27 @@ class DataNodeService(rpyc.Service):
             print('printing block report')
             print(blocks)
             c = rpyc.connect(NN_IP, PORT)
-            cmds = c.root.receive_block_report(MY_IP, blocks)
+            cmds = c.root.receive_block_report(MY_IP, blocks).split(',')
+            self.parse_commands(cmds)
 
             return blocks
+
+        def parse_commands(self, cmds):
+            while len(cmds) > 0:
+                cmd = cmds.pop(0)
+                if cmd == "delete":
+                    path = cmd.pop(0)
+                    self.exposed_delete_block(path)
+                elif cmd == "forward":
+                    path = cmd.pop(0)
+                    dest = cmd.pop(0)
+                    c = rpyc.connect(dest, 5000)
+                    next_node = c.root.BlockStore()
+                    reply = Reply.Load(next_node.put_block(path, self.exposed_get_block(path), [dest]))
+                    print(reply.status)
+                else:
+                    # delete everything
+
 
         #save block to storage from client request
         def exposed_put_block(self, file_name, data, replica_node_ids):
@@ -109,7 +127,6 @@ class DataNodeService(rpyc.Service):
                                 # after 4 tries give up
                                 print("could not send block replica")
                                 break
-
                 return Reply.reply()
 
         #retrieve a block, given a block name
