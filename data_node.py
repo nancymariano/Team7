@@ -3,11 +3,11 @@ import rpyc
 import pickle
 from reply import Reply
 import time
-import boto.ec2
 import boto3
+import threading
 
 #namenode information
-NN_IP = ''
+NN_IP = '35.167.176.87'
 PORT = ''
 MY_IP = ''
 
@@ -24,6 +24,7 @@ class DataNodeService(rpyc.Service):
             self.block_id = set()
             self.name_map = file_name
             self.load_node()
+            #self.block_report_timer()
 
         #load data node if previously started
         def load_node(self):
@@ -48,9 +49,14 @@ class DataNodeService(rpyc.Service):
             self.block_id.add(id)
             print('block report is', self.block_id)
 
+        def block_report_timer(self):
+            threading.Timer(60.0, self.block_report_timer).start()
+            self.block_report()
+
         #creates a list of block_ids
         def block_report(self):
             blocks = []
+            print("sending block report!!")
             with open(self.name_map, 'rb') as f:
                 while 1:
                     try:
@@ -60,7 +66,27 @@ class DataNodeService(rpyc.Service):
             f.close()
             print('printing block report')
             print(blocks)
+            c = rpyc.connect(NN_IP, PORT)
+            cmds = c.root.receive_block_report(MY_IP, blocks).split(',')
+            self.parse_commands(cmds)
+
             return blocks
+
+        def parse_commands(self, cmds):
+            while len(cmds) > 0:
+                cmd = cmds.pop(0)
+                if cmd == "delete":
+                    path = cmd.pop(0)
+                    self.exposed_delete_block(path)
+                elif cmd == "forward":
+                    path = cmd.pop(0)
+                    dest = cmd.pop(0)
+                    c = rpyc.connect(dest, 5000)
+                    next_node = c.root.BlockStore()
+                    reply = Reply.Load(next_node.put_block(path, self.exposed_get_block(path), [dest]))
+                    print(reply.status)
+                else:
+                    self.exposed_delete_all()
 
         #save block to storage from client request
         def exposed_put_block(self, file_name, data, replica_node_ids):
@@ -100,7 +126,6 @@ class DataNodeService(rpyc.Service):
                                 # after 4 tries give up
                                 print("could not send block replica")
                                 break
-
                 return Reply.reply()
 
         #retrieve a block, given a block name
@@ -122,17 +147,20 @@ class DataNodeService(rpyc.Service):
             else:
                 return Reply.error('Block not found')
 
-        # Precondition:
-        # Postcondition: block report is sent
-        # Function: sends updates on what is being stored on the DataNode
-        def send_block_report(self, ip, path):
-            dir = os.listdir(path)
-            block_list = []
-            for path, dirs, files in os.walk(path):
-                for filename in files:
-                    block_list.append(filename)
-            c = rpyc.connect(NN_IP, PORT)
-            cmds = c.root.receive_block_report(MY_IP, block_list)
+        #deletes all blocks in storage
+        def exposed_delete_all(self):
+            blocks = []
+            print("sending block report!!")
+            with open(self.name_map, 'rb') as f:
+                while 1:
+                    try:
+                        blocks.append(pickle.load(f))
+                    except EOFError:
+                        break
+            f.close()
+            for b in blocks:
+                self.block_id.remove(b)
+                os.remove(b)
 
         #start a new data node by creating a block device mapping
         #and then running an instance
@@ -151,12 +179,9 @@ class DataNodeService(rpyc.Service):
             #TODO: create an image and then call this file in the instance
             pass
 
-        #fcn for parsing name node responses to block reports
-        def exposed_parse_cmds(commands):
-            pass
-
 if __name__ == '__main__':
     from rpyc.utils.server import ThreadedServer
+    bs = DataNodeService.exposed_BlockStore()
+    #bs.block_report_timer()
     t = ThreadedServer(DataNodeService, port=5000)
     t.start()
-    #sendBlockReport(path)
