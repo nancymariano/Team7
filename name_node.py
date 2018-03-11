@@ -4,10 +4,20 @@ import rpyc
 class NameNode(rpyc.Service):
 
     def __init__(self):
-        self.file_to_block = "/Users/isabellebutterfield/SUFS/Team7/data/file_to_block.txt"
-        self.block_to_node = "/Users/isabellebutterfield/SUFS/Team7/data/block_to_node.txt"
-        self.valid_nodes = "/Users/isabellebutterfield/SUFS/Team7/data/valid_nodes.txt"
-        self.maintenance_needed = "/Users/isabellebutterfield/SUFS/Team7/data/maintenance_needed.txt"
+        self.file_to_block = "./file_to_block.txt"
+        self.block_to_node = "./block_to_node.txt"
+        self.valid_nodes = "./valid_nodes.txt"
+        self.maintenance_needed = "./maintenance_needed.txt"
+
+        my_file = open(self.file_to_block, 'w')
+        my_file.close()
+        my_file = open(self.block_to_node, 'w')
+        my_file.close()
+        my_file = open(self.valid_nodes, 'w')
+        my_file.close()
+        my_file = open(self.maintenance_needed, 'w')
+        my_file.close()
+
 
         self.replication_factor = 3
         self.block_size = 128
@@ -290,10 +300,6 @@ class NameNode(rpyc.Service):
 
 def main():
 
-    # from rpyc.utils.server import ThreadedServer
-    # t = ThreadedServer(name_node, port=5000)
-    # t.start()
-
 
     """
     #list_directory testing
@@ -315,8 +321,13 @@ def main():
     # print(make_file(128, "/Users/isabellebutterfield/test.txt"))
     # print(make_file(256, "/Users/isabellebutterfield/test2.txt"))
     node = NameNode()
+
+    # from rpyc.utils.server import ThreadedServer
+    # t = ThreadedServer(NameNode, port=5000)
+    # t.start()
+
     #print(node.make_file(10, "/Users/isabellebutterfield/test7.txt"))
-    node.replication_check()
+    #node.replication_check()
 
     ############################################################
 
