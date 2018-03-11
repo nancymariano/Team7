@@ -49,13 +49,16 @@ class DataNodeService(rpyc.Service):
         def block_report(self):
             blocks = []
             print("sending block report!!")
-            with open(self.name_map, 'rb') as f:
-                while 1:
-                    try:
-                        blocks.append(pickle.load(f))
-                    except EOFError:
-                        break
-            f.close()
+            if self.block_id == set():
+                pass
+            else:
+                with open(self.name_map, 'rb') as f:
+                    while 1:
+                        try:
+                            blocks.append(pickle.load(f))
+                        except EOFError:
+                            break
+                f.close()
             print('printing block report')
             print(blocks)
             c = rpyc.connect(NN_IP, PORT)
@@ -157,6 +160,7 @@ class DataNodeService(rpyc.Service):
 if __name__ == '__main__':
     from rpyc.utils.server import ThreadedServer
     bs = DataNodeService.exposed_BlockStore()
+    bs.__init__()
     bs.block_report_timer()
     t = ThreadedServer(DataNodeService, port=5000)
     t.start()
