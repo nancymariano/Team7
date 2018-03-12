@@ -22,7 +22,8 @@ bucket = conn.get_bucket(bucket_name)
 
 file_pattern = re.compile('^\\(.+\\)*(.+)\.(.+)$')
 block_size = 128 
-data_node_IP = '' 
+#data_node_IP = '' 
+name_node_IP = '35.167.176.87'
 node_IPs = ['ip1','ip2']
 
 @click.group()
@@ -58,19 +59,22 @@ def make_file(s3_obj, to_path):
     block_locations = name_reply.result
 
     send_blocks = [] 
-    j = 0 
+    j = 1 
+    k = 0
     with open(file_name, 'rb') as input: 
         bytes = input.read() 
         for i in range(0,len(bytes), block_size): 
-            send_blocks.append((block_locations[j], bytes[i: i+block_size]))
-            j+=1 
-
-    data_conn = rpyc.connect(data_node_IP, 5000, config = {'allow_public_attrs': True})
-    data_node = data_conn.root.BlockStore() 
+            send_blocks.append([block_locations[k], bytes[i: i+block_size], block_locations[j]])
+            j+=2 
+            k+=2
 
     for block in send_blocks: 
-        data_reply = Reply.Load(data_node.put_block(block(0), block(1),node_IPs))
+        data_node_IP = block[1][0]
+        data_conn = rpyc.connect(data_node_IP, 5000, config = {'allow_public_attrs': True})
+        data_node = data_conn.root.BlockStore()     
+        data_reply = Reply.Load(data_node.put_block(block[0], block[1], block[2]))
         print(data_reply.status)
+
 
 
 #delete will allow the user to delete a file given a full file path 
@@ -105,12 +109,21 @@ def read_file(path):
     block_locations = []
     name_reply = Reply.Load(name_node.read_file(path, block_locations))
 
-    data_conn = rpyc.connect(data_node_IP, 5000, config = {'allow_public_attrs': True})
-    data_node = data_conn.root.BlockStore() 
+    temp = block_locations.split(',')
+    receive_blocks = [] 
+    i = 0 
+    for i in range(0, len(block_locations), 2): 
+        receive_blocks[i] = [block_locations[i]]
+        node_IPs = block_locations[i+1].split('{')[1]
+        node_IPs = node_IPs.split('}')[0]
+        node_IPs = node_IPs.split(',')
+        receive_blocks[i][0].append(node_IPs)
     
     with open(file_name, 'a') as output: 
-        for block in block_locations:
-             data_reply = Reply.Load(data_node.get_block(block))
+        for block in receive_blocks:
+            data_conn = rpyc.connect(block[1][0], 5000, config = {'allow_public_attrs': True})
+            data_node = data_conn.root.BlockStore()
+            data_reply = Reply.Load(data_node.get_block(block))
              if not data_reply.error:
                  client_file.append(data_reply.result)
 
@@ -162,7 +175,7 @@ def list_dir(path):
     name_reply = Reply.Load(name_node.list_directory(path, content_names))
 
     if not name_reply.result: 
-        for name in content names: 
+        for name in content_names: 
             print(name)
     else: 
         print("Could not list directory contents")
