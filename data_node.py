@@ -54,24 +54,23 @@ class DataStore:
 
     # Saves block names to file on disk
     def save_blocks_set(self):
-        print('saving the set of blocks to disk..')
+        print('Saving the set of blocks to disk..')
         with open(self.data_set_fname, 'wb') as f:
             f.write(pickle.dumps(self.stored_blocks))
 
     # Sends timed block reports to namenode
     def block_report_timer(self):
-        threading.Timer(60.0, self.block_report_timer).start()
+        threading.Timer(10.0, self.block_report_timer).start()
         self.block_report()
 
     # Creates a list of blocks
     def block_report(self, send_to_namenode=True):
         blocks = list(self.stored_blocks)
 
-        print('printing block report')
-        print(blocks)
+        print('Printing block report: ', blocks)
 
         if send_to_namenode:
-            print("sending block report!!")
+            print("Sending block report")
             try:
                 c = rpyc.connect(NAMENODE_IP_ADDR, NAMENODE_PORT)
                 cmds = c.root.receive_block_report(DATANODE_IP_ADDR, blocks).split(',')
@@ -85,10 +84,14 @@ class DataStore:
     # Parses commands from namenode in response to block report
     def parse_commands(self, cmds):
         while len(cmds) > 0:
+            print('Commands from namenode: ', cmds)
             cmd = cmds.pop(0)
             if cmd == "delete":
                 path = cmds.pop(0)
-                self.delete_block(path)
+                if path == '*':
+                    self.delete_all()
+                else:
+                    self.delete_block(path)
             elif cmd == "forward":
                 path = cmds.pop(0)
                 dest = cmds.pop(0)
@@ -132,7 +135,7 @@ class DataStore:
 
         # forward block to rest of nodes
         if len(forward_to_nodes) > 0:
-            print("forwarding replicas to ", forward_to_nodes)
+            print("Forwarding replicas to ", forward_to_nodes)
             next_node = forward_to_nodes.pop(0)
             conn = rpyc.connect(next_node, DATANODE_PORT)
             next_node = conn.root
@@ -159,11 +162,11 @@ class DataNodeService(rpyc.Service):
     def on_connect(self):
         super().on_connect()
         self._data_store = DataStore.get_instance()
-        print('someone connected to me')
+        print('Someone connected to me')
 
     def on_disconnect(self):
         super().on_disconnect()
-        print('someone disconnected from me')
+        print('Someone disconnected from me')
 
     # Save block to storage from client request
     def exposed_put_block(self, file_name, data, forward_node_locations):
@@ -171,7 +174,7 @@ class DataNodeService(rpyc.Service):
             self._data_store.put_block(file_name, data, forward_node_locations)
             return Reply.reply()
         except:
-            return Reply.error('could not get block')
+            return Reply.error('Could not get block')
 
     # Retrieve a block, given a block name
     def exposed_get_block(self, file_name):
@@ -179,7 +182,7 @@ class DataNodeService(rpyc.Service):
             data = self._data_store.get_block(file_name)
             return Reply.reply(data)
         except:
-            return Reply.error('could not get block')
+            return Reply.error('Could not get block')
 
     # Delete a block, given a block name
     def exposed_delete_block(self, id):
@@ -187,7 +190,7 @@ class DataNodeService(rpyc.Service):
             self._data_store.delete_block(id)
             return Reply.reply()
         except:
-            return Reply.error('could not delete block')
+            return Reply.error('Could not delete block')
 
 
 def run_tests():
