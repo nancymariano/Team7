@@ -63,8 +63,11 @@ def make_file(s3_obj, to_path):
     k = 0
     with open(file_name, 'rb') as input: 
         bytes = input.read() 
-        for i in range(0,len(bytes), block_size): 
-            send_blocks.append([block_locations[k], bytes[i: i+block_size], block_locations[j]])
+        for i in range(0,len(bytes), block_size):             
+            node_IPs = block_locations[j+1].split('{')[1]
+            node_IPs = node_IPs.split('}')[0]
+            node_IPs = node_IPs.split(',')
+            send_blocks.append([block_locations[k], bytes[i: i+block_size], node_IPs)
             j+=2 
             k+=2
 
