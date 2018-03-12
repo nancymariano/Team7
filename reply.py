@@ -16,6 +16,9 @@ class Reply:
     def is_err(self):
         return self.status == 1
 
+    def __repr__(self):
+        return '{' + 'status=' + str(self.status) + ',result=' + str(self.result) + ',err=' + str(self.err) + '}'
+
     @staticmethod
     def reply(result = None):
         reply = Reply(status = 0, result = result, err = None)

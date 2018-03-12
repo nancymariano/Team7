@@ -1,165 +1,256 @@
+import sys
 import os
 import rpyc
 import pickle
+
 from reply import Reply
-import time
 import threading
 
-#namenode information
-NN_IP = '35.167.176.87'
-PORT = '5000'
-MY_IP = ''
+from rpyc.utils.server import ThreadedServer
+
+# Namenode information
+NAMENODE_IP_ADDR = 'localhost'
+NAMENODE_PORT = 5001
+
+DATANODE_IP_ADDR = ''
+DATANODE_PORT = 10101
+
+
+class DataStore:
+    """
+    Responsible for reading/writing/deleting files
+    Sends block report to namenode periodically
+    """
+
+    instance = None  # Singleton pattern - only one instance of this class allowed
+
+    def __init__(self, data_set_file_name='persistent.dat'):
+        if DataStore.instance is not None:
+            raise Exception('There should only be one instance of DataStore, use static get_instance() method')
+
+        self.stored_blocks = set()
+        self.data_set_fname = data_set_file_name
+
+    @classmethod
+    def get_instance(cls):
+        """
+        Returns a single global shared instance of this class. Calls constructor on the first call.
+        :return: Single global shared instance of DataStore
+        """
+        if cls.instance is None:
+            cls.instance = DataStore()
+        return cls.instance
+
+    # Load data node if previously started
+    def load_file_set(self):
+        print('Loading previous storage')
+        try:
+            with open(self.data_set_fname, 'rb') as f:
+                pickle_data = f.read()
+                file_set = pickle.loads(pickle_data)
+                self.stored_blocks = file_set
+        except:
+            print('Could not load persistent data, creating new')
+
+    # Saves block names to file on disk
+    def save_blocks_set(self):
+        print('saving the set of blocks to disk..')
+        with open(self.data_set_fname, 'wb') as f:
+            f.write(pickle.dumps(self.stored_blocks))
+
+    # Sends timed block reports to namenode
+    def block_report_timer(self):
+        threading.Timer(60.0, self.block_report_timer).start()
+        self.block_report()
+
+    # Creates a list of blocks
+    def block_report(self, send_to_namenode=True):
+        blocks = list(self.stored_blocks)
+
+        print('printing block report')
+        print(blocks)
+
+        if send_to_namenode:
+            print("sending block report!!")
+            try:
+                c = rpyc.connect(NAMENODE_IP_ADDR, NAMENODE_PORT)
+                cmds = c.root.receive_block_report(DATANODE_IP_ADDR, blocks).split(',')
+                self.parse_commands(cmds)
+            except Exception as e:
+                print('Unable to send block report to namenode')
+                print(e)
+
+        return blocks
+
+    # Parses commands from namenode in response to block report
+    def parse_commands(self, cmds):
+        while len(cmds) > 0:
+            cmd = cmds.pop(0)
+            if cmd == "delete":
+                path = cmds.pop(0)
+                self.delete_block(path)
+            elif cmd == "forward":
+                path = cmds.pop(0)
+                dest = cmds.pop(0)
+                c = rpyc.connect(dest, DATANODE_PORT)
+                next_node = c.root
+                reply = Reply.Load(next_node.put_block(path, self.get_block(path), [dest]))
+                print('reply:', reply)
+            else:
+                self.delete_all()
+
+    # Delete a block in storage, and in list of blocks
+    def delete_block(self, id):
+        if id not in self.stored_blocks:
+            raise Exception('Block not found')
+
+        os.remove(id)
+
+        self.stored_blocks.remove(id)
+        self.save_blocks_set()
+
+    # Retrieve a block, given a block name
+    def get_block(self, file_name):
+        if file_name not in self.stored_blocks:
+            raise Exception('File not found')
+
+        with open(file_name, 'rb') as f:
+            return f.read()
+
+    # Save block to storage from client request
+    def put_block(self, file_name, data, forward_to_nodes):
+        print('new file name', file_name)
+        if file_name in self.stored_blocks:
+            raise Exception('File name already exists')
+
+        with open(file_name, 'wb') as f:
+            f.write(data)
+
+        # save it to the set of blocks and persist to disk
+        self.stored_blocks.add(file_name)
+        self.save_blocks_set()
+
+        # forward block to rest of nodes
+        if len(forward_to_nodes) > 0:
+            print("forwarding replicas to ", forward_to_nodes)
+            next_node = forward_to_nodes.pop(0)
+            conn = rpyc.connect(next_node, DATANODE_PORT)
+            next_node = conn.root
+
+            put_ret = next_node.put_block(file_name, data, forward_to_nodes)
+            reply = Reply.Load(put_ret)
+            print('Next node replied with: ', str(reply))
+            if reply.is_ok():
+                print("replica sent!")
+            else:
+                print('Unable to send: ', reply.err)
+                raise Exception(reply.err)
+
+    # Deletes all blocks in storage
+    def delete_all(self):
+        print("deleting all blocks")
+        for b in self.stored_blocks:
+            self.stored_blocks.remove(b)
+            os.remove(b)
+
 
 class DataNodeService(rpyc.Service):
-    class exposed_BlockStore:
-        def __init__(self, file_name='persistent.dat'):
-            self.block_id = set()
-            self.name_map = file_name
-            self.load_node()
-            #self.block_report_timer()
+    # Gets an instance of DataStore on connect
+    def on_connect(self):
+        super().on_connect()
+        self._data_store = DataStore.get_instance()
+        print('someone connected to me')
 
-        #load data node if previously started
-        def load_node(self):
-            print('Loading previous storage')
-            try:
-                with open(self.name_map, 'rb') as f:
-                    while True:
-                        try:
-                            self.block_id.add(pickle.load(f))
-                        except EOFError:
-                            break
-            except:
-                print('Could not load persistent data, creating new')
-                self.block_id = set()
+    def on_disconnect(self):
+        super().on_disconnect()
+        print('someone disconnected from me')
 
-        #write block to block report
-        def save_block(self, id):
-            print('saving ', id)
-            with open(self.name_map, 'a+b') as f:
-                pickle.dump(id, f)
-            f.close()
-            self.block_id.add(id)
-            print('block report is', self.block_id)
+    # Save block to storage from client request
+    def exposed_put_block(self, file_name, data, forward_node_locations):
+        try:
+            self._data_store.put_block(file_name, data, forward_node_locations)
+            return Reply.reply()
+        except:
+            return Reply.error('could not get block')
 
-        def block_report_timer(self):
-            threading.Timer(60.0, self.block_report_timer).start()
-            self.block_report()
+    # Retrieve a block, given a block name
+    def exposed_get_block(self, file_name):
+        try:
+            data = self._data_store.get_block(file_name)
+            return Reply.reply(data)
+        except:
+            return Reply.error('could not get block')
 
-        #creates a list of block_ids
-        def block_report(self):
-            blocks = []
-            print("sending block report!!")
-            if self.block_id == set():
-                pass
-            else:
-                with open(self.name_map, 'rb') as f:
-                    while 1:
-                        try:
-                            blocks.append(pickle.load(f))
-                        except EOFError:
-                            break
-                f.close()
-            print('printing block report')
-            print(blocks)
-            c = rpyc.connect(NN_IP, PORT)
-            cmds = c.root.receive_block_report(MY_IP, blocks).split(',')
-            self.parse_commands(cmds)
+    # Delete a block, given a block name
+    def exposed_delete_block(self, id):
+        try:
+            self._data_store.delete_block(id)
+            return Reply.reply()
+        except:
+            return Reply.error('could not delete block')
 
-            return blocks
 
-        def parse_commands(self, cmds):
-            while len(cmds) > 0:
-                cmd = cmds.pop(0)
-                if cmd == "delete":
-                    path = cmds.pop(0)
-                    self.exposed_delete_block(path)
-                elif cmd == "forward":
-                    path = cmds.pop(0)
-                    dest = cmds.pop(0)
-                    c = rpyc.connect(dest, 5000)
-                    next_node = c.root.BlockStore()
-                    reply = Reply.Load(next_node.put_block(path, self.exposed_get_block(path), [dest]))
-                    print(reply.status)
-                else:
-                    self.exposed_delete_all()
+def run_tests():
+    store = DataStore.get_instance()
+    store.delete_all()
+    store.put_block('file1', b'test data foo bar', ['localhost'])
+    store.block_report(send_to_namenode=False)
+    store.put_block('file2', b'file 2 data', ['localhost'])
+    store.put_block('file3', b'file 3 data data data', ['localhost'])
+    store.block_report(send_to_namenode=False)
 
-        #save block to storage from client request
-        def exposed_put_block(self, file_name, data, replica_node_ids):
-            print('new file name', file_name)
-            if file_name in self.block_id:
-                return Reply.error('File name already exists')
-            else:
-                try:
-                    with open(file_name, 'wb') as f:
-                        f.write(data)
-                except:
-                    self.block_id.remove(id)
-                    return Reply.error('Error saving block')
+    print('getting some data back..')
+    file1_get_data = store.get_block('file1')
+    print('got: ', file1_get_data)
 
-                self.save_block(file_name)
+    print('deleting file1..')
+    store.delete_block('file1')
+    store.block_report(send_to_namenode=False)
 
-                # send out replicas
-                replica_node_ids.pop(0)
-                if len(replica_node_ids) > 0:
-                    done = 1
-                    tries = 0
-                    print("Sending replica to ", replica_node_ids[0])
-                    while done == 1:
-                        c = rpyc.connect(replica_node_ids[0], 5000)
-                        next_node = c.root.BlockStore()
-                        reply = Reply.Load(next_node.put_block(file_name, data, replica_node_ids))
-                        print(reply.status)
-                        if reply.status == 0:
-                            print("replica sent!")
-                            done = 0
-                        else:
-                            print("node busy trying again")
-                            # wait 5 seconds and try again
-                            time.sleep(5)
-                            tries += 1
-                            if tries > 4:
-                                # after 4 tries give up
-                                print("could not send block replica")
-                                break
-                return Reply.reply()
+    try:
+        file1_get_data = store.get_block('file1')
+        print('SHOULD NOT FIND FILE AFTER DELETED')
+    except:
+        print('file1 not found')
 
-        #retrieve a block, given a block name
-        def exposed_get_block(self, file_name):
-            if file_name in self.block_id:
-                read_file = open(file_name, 'rb')
-                data = read_file.read()
-                read_file.close()
-                return Reply.reply(data)
-            else:
-                return Reply.error('File not found')
+    print('deleted block from this namenode, attempting to get it from replica..')
+    node2_conn = rpyc.connect('localhost', DATANODE_PORT)
+    node2 = node2_conn.root
+    node2_reply = Reply.Load(node2.get_block('file1'))
+    if node2_reply.is_ok():
+        node2_data = node2_reply.result
+        print('got data from replica: ', node2_data)
+    else:
+        print('could not get data from replica', node2_reply.err)
 
-        #delete a block, given a block name
-        def exposed_delete_block(self, id):
-            if id in self.block_id:
-                self.block_id.remove(id)
-                os.remove(id)
-                return Reply.reply()
-            else:
-                return Reply.error('Block not found')
+    print('delete file2 from replica..')
+    node2_reply = Reply.Load(node2.delete_block('file2'))
+    print('result: ', repr(node2_reply))
 
-        #deletes all blocks in storage
-        def delete_all(self):
-            blocks = []
-            print("sending block report!!")
-            with open(self.name_map, 'rb') as f:
-                while 1:
-                    try:
-                        blocks.append(pickle.load(f))
-                    except EOFError:
-                        break
-            f.close()
-            for b in blocks:
-                self.block_id.remove(b)
-                os.remove(b)
+    print('attempting to get the deleted file from replica, should fail..')
+    node2_reply = Reply.Load(node2.get_block('file2'))
+    if node2_reply.is_ok():
+        print('Error: should have failed getting a deleted file')
+    else:
+        print('Success: cant get deleted: ', node2_reply.err)
+
 
 if __name__ == '__main__':
-    from rpyc.utils.server import ThreadedServer
-    bs = DataNodeService.exposed_BlockStore()
-    bs.block_report_timer()
-    t = ThreadedServer(DataNodeService, port=5000)
-    t.start()
+
+    if len(sys.argv) > 1 and sys.argv[1] == 'test':
+        run_tests()
+        # When in test mode, do not start the server
+        sys.exit(0)
+
+    server_listen_port = DATANODE_PORT
+
+    # check if user supplied port number to listen to
+    if len(sys.argv) > 1:
+        server_listen_port = int(sys.argv[1])
+
+    # Initialize a timer to periodically send block reports to namenode
+    DataStore.get_instance().block_report_timer()
+
+    print('Starting rpc server..')
+    server = ThreadedServer(DataNodeService, port=server_listen_port)
+    server.start()
