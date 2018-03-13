@@ -73,6 +73,7 @@ class DataStore:
 
         if send_to_namenode:
             print("Sending block report")
+            try:
                 c = rpyc.connect(NAMENODE_IP_ADDR, NAMENODE_PORT)
                 cmds = c.root.receive_block_report(DATANODE_IP_ADDR, blocks).split(',')
                 self.parse_commands(cmds)
