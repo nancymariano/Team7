@@ -3,16 +3,17 @@ import pickle
 from reply import Reply
 from io import BytesIO
 import shutil
+import socket;
 
 block_size = 2048
 data_node_IP = 'localhost'
 # when connecting to nodes on ec2 servers
-node_IPs = ['ip1', 'ip2']
+node_IPs = ['52.38.95.214']#'54.187.8.150']#, '54.191.183.12']
 
 #create blocks from file
 def create_blocks(file_name):
     blocks_to_send = []
-    with open(file_name, 'rb') as input:
+    with open(file_name, 'r+') as input:
         bytes = input.read()
         for i in range(0, len(bytes), block_size):
             blocks_to_send.append(bytes[i: i+block_size])
@@ -25,15 +26,18 @@ def send_block(file_name):
     conn = rpyc.connect(node_IPs[0], 5000, config={'allow_public_attrs': True})
     print("Connecting with server...")
 
-    data_node = conn.root.BlockStore()
+    data_node = conn.root
     file_blocks = create_blocks(file_name)
 
     i = 1
     for block in file_blocks:
-        block_id = 'MobyBlock' + str(i)
+        block_id = 'MobyBlockk' + str(i)
         print("Now inserting: ", block_id)
-        reply = Reply.Load(data_node.put_block(block_id, block, node_IPs))
-        print(reply.status)
+        replyVal = 1
+        while replyVal == 1:
+            reply = Reply.Load(data_node.put_block(block_id, block, node_IPs))
+            replyVal = reply.status
+            print(reply.status)
 
         if reply.is_err():
             print('Could not insert block', block_id)
@@ -97,7 +101,8 @@ if __name__ == '__main__':
     #send blocks
     # print('Testing: save blocks in storage')
     # print('Sending Moby Dick...')
-    # send_block('test.txt')
+    print ('node ip', socket.gethostbyname(node_IPs[0]))
+    send_block('test123.txt')
     # print("Send complete")
 
     #retrieve block

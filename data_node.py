@@ -2,6 +2,8 @@ import sys
 import os
 import rpyc
 import pickle
+import socket
+
 
 from reply import Reply
 import threading
@@ -9,11 +11,11 @@ import threading
 from rpyc.utils.server import ThreadedServer
 
 # Namenode information
-NAMENODE_IP_ADDR = 'localhost'
-NAMENODE_PORT = 5001
-
-DATANODE_IP_ADDR = ''
-DATANODE_PORT = 10101
+NAMENODE_IP_ADDR = '54.218.73.148'
+NAMENODE_PORT = 5000
+DATANODE_PORT = 5000
+DATANODE_IP_ADDR = '52.38.95.214'
+BLOCK_REPORT_FREQ = 25.0
 
 
 class DataStore:
@@ -60,7 +62,7 @@ class DataStore:
 
     # Sends timed block reports to namenode
     def block_report_timer(self):
-        threading.Timer(10.0, self.block_report_timer).start()
+        threading.Timer(BLOCK_REPORT_FREQ, self.block_report_timer).start()
         self.block_report()
 
     # Creates a list of blocks
@@ -71,7 +73,6 @@ class DataStore:
 
         if send_to_namenode:
             print("Sending block report")
-            try:
                 c = rpyc.connect(NAMENODE_IP_ADDR, NAMENODE_PORT)
                 cmds = c.root.receive_block_report(DATANODE_IP_ADDR, blocks).split(',')
                 self.parse_commands(cmds)
@@ -126,13 +127,15 @@ class DataStore:
         if file_name in self.stored_blocks:
             raise Exception('File name already exists')
 
-        with open(file_name, 'wb') as f:
+        with open(file_name, 'w+') as f:
             f.write(data)
+        print('File written!')
 
         # save it to the set of blocks and persist to disk
         self.stored_blocks.add(file_name)
         self.save_blocks_set()
 
+        forward_to_nodes = forward_to_nodes[1:]
         # forward block to rest of nodes
         if len(forward_to_nodes) > 0:
             print("Forwarding replicas to ", forward_to_nodes)
@@ -148,6 +151,7 @@ class DataStore:
             else:
                 print('Unable to send: ', reply.err)
                 raise Exception(reply.err)
+        return Reply.reply()
 
     # Deletes all blocks in storage
     def delete_all(self):
@@ -255,5 +259,6 @@ if __name__ == '__main__':
     DataStore.get_instance().block_report_timer()
 
     print('Starting rpc server..')
-    server = ThreadedServer(DataNodeService, port=server_listen_port)
+    server = ThreadedServer(DataNodeService, port=5000)
     server.start()
+
