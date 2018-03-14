@@ -8,7 +8,7 @@ import socket;
 block_size = 2048
 data_node_IP = 'localhost'
 # when connecting to nodes on ec2 servers
-node_IPs = ['52.38.95.214']#'54.187.8.150']#, '54.191.183.12']
+node_IPs = ['52.38.95.214','54.191.217.184','34.214.97.9']#'54.187.8.150']#, '54.191.183.12']
 
 #create blocks from file
 def create_blocks(file_name):
@@ -31,17 +31,17 @@ def send_block(file_name):
 
     i = 1
     for block in file_blocks:
-        block_id = 'MobyBlockk' + str(i)
+        block_id = 'MobyBlocktestAgain' + str(i)
         print("Now inserting: ", block_id)
         replyVal = 1
         while replyVal == 1:
             reply = Reply.Load(data_node.put_block(block_id, block, node_IPs))
-            replyVal = reply.status
+            replyVal = 0
             print(reply.status)
 
         if reply.is_err():
-            print('Could not insert block', block_id)
-            print(reply.err)
+            #print('Could not insert block', block_id)
+            #print(reply.err)
             break
         i+=1
 

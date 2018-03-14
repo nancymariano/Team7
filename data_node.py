@@ -11,7 +11,7 @@ import threading
 from rpyc.utils.server import ThreadedServer
 
 # Namenode information
-NAMENODE_IP_ADDR = '54.218.73.148'
+NAMENODE_IP_ADDR = '34.210.149.98'
 NAMENODE_PORT = 5000
 DATANODE_PORT = 5000
 DATANODE_IP_ADDR = '52.38.95.214'
@@ -102,7 +102,7 @@ class DataStore:
                 reply = Reply.Load(next_node.put_block(path, self.get_block(path), [dest]))
                 print('reply:', reply)
             else:
-                self.delete_all()
+                pass
 
     # Delete a block in storage, and in list of blocks
     def delete_block(self, id):
@@ -140,7 +140,7 @@ class DataStore:
         # forward block to rest of nodes
         if len(forward_to_nodes) > 0:
             print("Forwarding replicas to ", forward_to_nodes)
-            next_node = forward_to_nodes.pop(0)
+            next_node = forward_to_nodes[0]
             conn = rpyc.connect(next_node, DATANODE_PORT)
             next_node = conn.root
 
@@ -151,7 +151,7 @@ class DataStore:
                 print("replica sent!")
             else:
                 print('Unable to send: ', reply.err)
-                raise Exception(reply.err)
+                # raise Exception(reply.err)
         return Reply.reply()
 
     # Deletes all blocks in storage
