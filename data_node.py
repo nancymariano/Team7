@@ -3,8 +3,6 @@ import os
 import rpyc
 import pickle
 import socket
-
-
 from reply import Reply
 import threading
 
@@ -47,7 +45,7 @@ class DataStore:
     def load_file_set(self):
         print('Loading previous storage')
         try:
-            with open(self.data_set_fname, 'rb') as f:
+            with open(self.data_set_fname, 'r+') as f:
                 pickle_data = f.read()
                 file_set = pickle.loads(pickle_data)
                 self.stored_blocks = file_set
@@ -128,8 +126,14 @@ class DataStore:
         if file_name in self.stored_blocks:
             raise Exception('File name already exists')
 
-        with open(file_name, 'w+') as f:
-            f.write(data)
+        print(data)
+        try:
+            with open(file_name, 'wb+') as f:
+                f.write(data)
+        except:
+            print('could not open data')
+            raise Exception('Could not open data')
+
         print('File written!')
 
         # save it to the set of blocks and persist to disk
@@ -160,6 +164,9 @@ class DataStore:
         for b in self.stored_blocks:
             self.stored_blocks.remove(b)
             os.remove(b)
+
+    def get_file_name(self, file_name):
+        return file_name.replace('/', '!!!@@@')
 
 
 class DataNodeService(rpyc.Service):

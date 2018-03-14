@@ -13,7 +13,7 @@ node_IPs = ['52.38.95.214','54.191.217.184','34.214.97.9']#'54.187.8.150']#, '54
 #create blocks from file
 def create_blocks(file_name):
     blocks_to_send = []
-    with open(file_name, 'r+') as input:
+    with open(file_name, 'rb+') as input:
         bytes = input.read()
         for i in range(0, len(bytes), block_size):
             blocks_to_send.append(bytes[i: i+block_size])
@@ -31,7 +31,7 @@ def send_block(file_name):
 
     i = 1
     for block in file_blocks:
-        block_id = 'MobyBlocktestAgain' + str(i)
+        block_id = 'MobyBlocktestAgain.test-' + str(i)
         print("Now inserting: ", block_id)
         replyVal = 1
         while replyVal == 1:
@@ -47,8 +47,8 @@ def send_block(file_name):
 
 #retrieve blocks and save blocks to a file
 def get_blocks(block_name, new_file_name):
-    conn = rpyc.connect(data_node_IP, 5000, config={'allow_public_attrs': True})
-    data_node = conn.root.BlockStore()
+    conn = rpyc.connect(node_IPs[0], 5000, config={'allow_public_attrs': True})
+    data_node = conn.root
     print("Connecting with server...")
 
     reply = Reply.Load(data_node.get_block(block_name))
@@ -107,7 +107,7 @@ if __name__ == '__main__':
 
     #retrieve block
     # print('Testing: retrieving block')
-    # get_blocks('MobyBlock1', 'MobyBlock1.txt')
+    get_blocks('MobyBlocktestAgain1', 'testing')
     # print('Retrieval complete')
 
     #delete block
