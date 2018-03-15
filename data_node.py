@@ -12,7 +12,7 @@ from rpyc.utils.server import ThreadedServer
 NAMENODE_IP_ADDR = '34.210.149.98'
 NAMENODE_PORT = 5000
 DATANODE_PORT = 5000
-DATANODE_IP_ADDR = '52.38.95.214'
+DATANODE_IP_ADDR = '34.217.74.84'
 BLOCK_REPORT_FREQ = 25.0
 
 
@@ -45,7 +45,7 @@ class DataStore:
     def load_file_set(self):
         print('Loading previous storage')
         try:
-            with open(self.data_set_fname, 'r+') as f:
+            with open(self.data_set_fname, 'rb+') as f:
                 pickle_data = f.read()
                 file_set = pickle.loads(pickle_data)
                 self.stored_blocks = file_set
@@ -55,7 +55,7 @@ class DataStore:
     # Saves block names to file on disk
     def save_blocks_set(self):
         print('Saving the set of blocks to disk..')
-        with open(self.data_set_fname, 'wb') as f:
+        with open(self.data_set_fname, 'wb+') as f:
             f.write(pickle.dumps(self.stored_blocks))
 
     # Sends timed block reports to namenode
@@ -115,9 +115,11 @@ class DataStore:
     # Retrieve a block, given a block name
     def get_block(self, file_name):
         if file_name not in self.stored_blocks:
+            print('could not find file')
             raise Exception('File not found')
+            return Reply.error('file not found')
 
-        with open(file_name, 'rb') as f:
+        with open(file_name, 'rb+') as f:
             return f.read()
 
     # Save block to storage from client request
@@ -125,8 +127,6 @@ class DataStore:
         print('new file name', file_name)
         if file_name in self.stored_blocks:
             raise Exception('File name already exists')
-
-        print(data)
         try:
             with open(file_name, 'wb+') as f:
                 f.write(data)
@@ -165,9 +165,6 @@ class DataStore:
             self.stored_blocks.remove(b)
             os.remove(b)
 
-    def get_file_name(self, file_name):
-        return file_name.replace('/', '!!!@@@')
-
 
 class DataNodeService(rpyc.Service):
     # Gets an instance of DataStore on connect
@@ -186,7 +183,7 @@ class DataNodeService(rpyc.Service):
             self._data_store.put_block(file_name, data, forward_node_locations)
             return Reply.reply()
         except:
-            return Reply.error('Could not get block')
+            return Reply.error('Could not put block')
 
     # Retrieve a block, given a block name
     def exposed_get_block(self, file_name):

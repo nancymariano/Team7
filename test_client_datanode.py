@@ -3,12 +3,12 @@ import pickle
 from reply import Reply
 from io import BytesIO
 import shutil
-import socket;
+import socket
 
 block_size = 2048
 data_node_IP = 'localhost'
 # when connecting to nodes on ec2 servers
-node_IPs = ['52.38.95.214','54.191.217.184','34.214.97.9']#'54.187.8.150']#, '54.191.183.12']
+node_IPs = ['34.217.74.84','54.191.217.184','34.214.97.9']#'54.187.8.150']#, '54.191.183.12']
 
 #create blocks from file
 def create_blocks(file_name):
@@ -65,7 +65,7 @@ def get_blocks(block_name, new_file_name):
     print('Fetched: ', len(fetched_bytes.getbuffer()))
 
     print("Saving to: ", new_file_name)
-    with open(new_file_name, 'wb') as dest:
+    with open(new_file_name, 'wb+') as dest:
         shutil.copyfileobj(fetched_bytes, dest, block_size)
     dest.close()
 
@@ -102,12 +102,12 @@ if __name__ == '__main__':
     # print('Testing: save blocks in storage')
     # print('Sending Moby Dick...')
     print ('node ip', socket.gethostbyname(node_IPs[0]))
-    send_block('test123.txt')
+    send_block('testing')
     # print("Send complete")
 
     #retrieve block
     # print('Testing: retrieving block')
-    get_blocks('MobyBlocktestAgain1', 'testing')
+    get_blocks('MobyBlocktestAgain.test-1', 'testing')
     # print('Retrieval complete')
 
     #delete block
