@@ -4,11 +4,16 @@ from reply import Reply
 from io import BytesIO
 import shutil
 import socket
+import boto3
+import botocore
 
-block_size = 2048
+block_size = 67108864  #64MB for now
 data_node_IP = 'localhost'
 # when connecting to nodes on ec2 servers
-node_IPs = ['34.217.74.84','54.191.217.184','34.214.97.9']#'54.187.8.150']#, '54.191.183.12']
+node_IPs = ['34.217.74.84']#,'54.191.217.184','34.214.97.9']#'54.187.8.150']#, '54.191.183.12']
+BUCKET_NAME = 'test-files-project'
+ACCESS_ID = ''
+ACCESS_KEY = ''
 
 #create blocks from file
 def create_blocks(file_name):
@@ -23,27 +28,21 @@ def create_blocks(file_name):
 #sending a file over
 def send_block(file_name):
     # conn = rpyc.connect(data_node_IP, 5000, config={'allow_public_attrs': True})
+    s3 = boto3.resource('s3', aws_access_key_id=ACCESS_ID, aws_secret_access_key=ACCESS_KEY)
+    s3data = s3.Object(bucket_name=BUCKET_NAME, key=file_name).get()
     conn = rpyc.connect(node_IPs[0], 5000, config={'allow_public_attrs': True})
     print("Connecting with server...")
 
     data_node = conn.root
-    file_blocks = create_blocks(file_name)
-
     i = 1
-    for block in file_blocks:
-        block_id = 'MobyBlocktestAgain.test-' + str(i)
-        print("Now inserting: ", block_id)
-        replyVal = 1
-        while replyVal == 1:
-            reply = Reply.Load(data_node.put_block(block_id, block, node_IPs))
-            replyVal = 0
-            print(reply.status)
-
-        if reply.is_err():
-            #print('Could not insert block', block_id)
-            #print(reply.err)
-            break
+    for chunk in iter(lambda: s3data['Body'].read(block_size), b''):
+        block_id = 'file-test-' + str(i)
+        # i think here is where we register it with name node??
         i+=1
+        print("Now inserting: ", block_id)
+        reply = Reply.Load(data_node.put_block(block_id, chunk, node_IPs))
+        print(reply.status)
+
 
 #retrieve blocks and save blocks to a file
 def get_blocks(block_name, new_file_name):
@@ -102,12 +101,12 @@ if __name__ == '__main__':
     # print('Testing: save blocks in storage')
     # print('Sending Moby Dick...')
     print ('node ip', socket.gethostbyname(node_IPs[0]))
-    send_block('testing')
+    send_block('1GB.bin')
     # print("Send complete")
 
     #retrieve block
     # print('Testing: retrieving block')
-    get_blocks('MobyBlocktestAgain.test-1', 'testing')
+    # get_blocks('1GB.bin', 'testing')
     # print('Retrieval complete')
 
     #delete block
