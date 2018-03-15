@@ -28,9 +28,10 @@ def create_blocks(file_name):
 #sending a file over
 def send_block(file_name):
     # conn = rpyc.connect(data_node_IP, 5000, config={'allow_public_attrs': True})
-    s3 = boto3.resource('s3', aws_access_key_id=ACCESS_ID, aws_secret_access_key=ACCESS_KEY)
+    s3 = boto3.resource('s3')#, aws_access_key_id=ACCESS_ID, aws_secret_access_key=ACCESS_KEY)
     s3data = s3.Object(bucket_name=BUCKET_NAME, key=file_name).get()
     conn = rpyc.connect(node_IPs[0], 5000, config={'allow_public_attrs': True})
+    print(s3data['ContentLength'])
     print("Connecting with server...")
 
     data_node = conn.root
