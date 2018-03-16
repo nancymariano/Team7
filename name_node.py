@@ -1,34 +1,49 @@
 import rpyc
+from pathlib import Path
+import threading
 
+heart_dict = {}
 
 class NameNode(rpyc.Service):
 
-    def on_connect(self):
-        super().on_connect()
+    def __init__(self, a):
         self.file_to_block = "./file_to_block.txt"
         self.block_to_node = "./block_to_node.txt"
         self.valid_nodes = "./valid_nodes.txt"
         self.maintenance_needed = "./maintenance_needed.txt"
 
-        my_file = open(self.file_to_block, 'w')
-        my_file.close()
-        my_file = open(self.block_to_node, 'w')
-        my_file.close()
-        my_file = open(self.valid_nodes, 'w')
-        my_file.close()
-        my_file = open(self.maintenance_needed, 'w')
-        my_file.close()
+        my_file = self.file_to_block
+        my_file_path = Path(my_file)
+        if not my_file_path.is_file():
+            open_my_file = open(my_file, 'w')
+            open_my_file.close()
+
+        my_file = self.block_to_node
+        my_file_path = Path(my_file)
+        if not my_file_path.is_file():
+            open_my_file = open(my_file, 'w')
+            open_my_file.close()
+
+        my_file = self.valid_nodes
+        my_file_path = Path(my_file)
+        if not my_file_path.is_file():
+            open_my_file = open(my_file, 'w')
+            open_my_file.close()
+
+        my_file = self.maintenance_needed
+        my_file_path = Path(my_file)
+        if not my_file_path.is_file():
+            open_my_file = open(my_file, 'w')
+            open_my_file.close()
+
 
         self.replication_factor = 3
         self.block_size = 128
         self.default_time = 10
-        self.heart_dict = {}
-        print('Recvd connection')
+        self.interval = 6.0
+        self.replication_interval = 20.0
 
-    def on_disconnect(self):
-        super().on_disconnect()
-
-    def list_directory(self, directory_path, file_paths):
+    def exposed_list_directory(self, directory_path, file_paths):
         # Adds string file paths to given file_path empty set;
         # if invalid path, returns False, otherwise True
 
@@ -56,7 +71,7 @@ class NameNode(rpyc.Service):
         my_file.close()
         return directory_exists
 
-    def create_directory(self, directory_path):
+    def exposed_create_directory(self, directory_path):
 
         # Truncates any appended "/"
         if directory_path[-1] == "/":
@@ -67,6 +82,8 @@ class NameNode(rpyc.Service):
         existing_directory = directory_path[0:-(len_new_directory + 1)]
 
         success = False
+        if existing_directory == "":
+            success = True
         read_file_to_block = open(self.file_to_block)
         for line_of_text in read_file_to_block:
             current_directory = line_of_text.split(",")[0]
@@ -83,18 +100,21 @@ class NameNode(rpyc.Service):
 
         return success
 
-    def make_file(self, file_size, file_path):
+    def exposed_make_file(self, file_size, file_path):
         # Check all directories as you go; only read once
         if file_size % self.block_size == 0:
             num_blocks = file_size / self.block_size
         else:
             num_blocks = (file_size / self.block_size) + 1
 
+        print("Starting make file")
         file_name = file_path.split("/")[-1]
         len_file_name = len(file_name)
         recent_directory = file_path[0:-(len_file_name + 1)]
 
         success = False
+        if recent_directory == "":
+            success = True
         read_file_to_block = open(self.file_to_block)
         for line_of_text in read_file_to_block:
             current_directory = line_of_text.split(",")[0]
@@ -106,10 +126,16 @@ class NameNode(rpyc.Service):
 
         return_blocks = []
 
+        print("Ending make file")
         if success:
-            return self.write_assigned_blocks_to_file(num_blocks, return_blocks, file_path)
+            print("returning")
+            return_stuff = self.write_assigned_blocks_to_file(num_blocks, return_blocks, file_path)
+            print(return_stuff)
+            #return self.write_assigned_blocks_to_file(num_blocks, return_blocks, file_path)
+            return return_stuff
 
     def write_assigned_blocks_to_file(self, num_blocks, return_blocks, file_path):
+
         write_block_to_node = open(self.block_to_node, "a+")
         write_file_to_block = open(self.file_to_block, "a+")
         write_file_to_block.write(file_path + ", {")
@@ -128,7 +154,7 @@ class NameNode(rpyc.Service):
                     new_blocks = new_blocks + assign_nodes[node_iterator]
                     node_iterator = node_iterator + 1
                 else:
-                    new_blocks = new_blocks + ", " + assign_nodes[node_iterator]
+                    new_blocks = new_blocks + "," + assign_nodes[node_iterator]
                     node_iterator = node_iterator + 1
             return_blocks.append("{" + new_blocks + "}")
 
@@ -142,6 +168,7 @@ class NameNode(rpyc.Service):
         write_file_to_block.close()
         write_block_to_node.close()
 
+        print("Finishing assignment")
         return return_blocks
 
     def get_open_location(self, num_blocks):
@@ -165,7 +192,7 @@ class NameNode(rpyc.Service):
 
         return top_nodes
 
-    def read_file(self, path, path_list):
+    def exposed_read_file(self, path, path_list):
         file_list = self.find_all_files(path)
         if not file_list:
             return 0
@@ -174,12 +201,12 @@ class NameNode(rpyc.Service):
         for each_line in block_file:
             items = each_line.split(",")
             if items[0] == path:
-                for block in items[1:len(items) - 1]:
+                for block in items[1:len(items)-1]:
                     new_block = path + "/" + block
                     block_list.append(new_block)
         block_file.close()
         node_file = open(self.block_to_node, 'r')
-        for x in block_list:
+        for current_block in block_list:
             for each_line in node_file:
                 current_block = each_line.split(",")[0]  # incorrect syntax
                 if x == current_block:
@@ -192,10 +219,12 @@ class NameNode(rpyc.Service):
         node_id = str(node_id)
         my_file = open(self.valid_nodes, 'r')
         lines = my_file.readlines()
-        if not (node_id in lines):
+        if not ((node_id + "\n") in lines):
             self.new_node(node_id)
             response = "delete,*"
-        self.heart_dict[node_id] = self.default_time
+            return response
+        heart_dict[node_id] = self.default_time
+        print(heart_dict)
         my_file = open(self.maintenance_needed, 'r')
         lines = my_file.readlines()
         my_file.close()
@@ -209,7 +238,7 @@ class NameNode(rpyc.Service):
         for block in block_list:
             found = 0
             my_file = open(self.block_to_node, 'r')
-            lines = my_file.realines()
+            lines = my_file.readlines()
             my_file.close()
             my_file = open(self.block_to_node, 'w')
             for each_line in lines:
@@ -234,22 +263,24 @@ class NameNode(rpyc.Service):
     def new_node(self, node_id):
         my_file = open(self.valid_nodes, 'r')
         lines = my_file.readlines()
+        my_file.close()
         if node_id in lines:
             return 0
-        my_file = open(self.valid_nodes, 'a')
+        my_file = open(self.valid_nodes, 'a+')
         my_file.write(node_id)
+        my_file.write("\n")
         my_file.close()
-        self.heart_dict[node_id] = self.default_time
+        heart_dict[node_id] = self.default_time
         return 1
 
     def heart_check(self):
-        for node, value in self.heart_dict.items():
-            value = value - 1
-            self.heart_dict[node] = value
+        for node, value in heart_dict.items():
+            if value > 0:
+                value = value - 1
+            heart_dict[node] = value
             if value == 0:
                 self.dead_node(node)
-                del self.heart_dict[node]
-        return
+                heart_dict.pop(node, None)
 
 
     def dead_node(self, node_id):
@@ -258,13 +289,13 @@ class NameNode(rpyc.Service):
         my_file.close()
         my_file = open(self.valid_nodes, 'w')
         for each_line in lines:
-            if not (each_line == str(node_id)):
+            if not (each_line == str(node_id) + "\n"):
                 my_file.write(each_line)
         my_file.close()
-        my_file = open(self.block_to_nodes, 'r')
+        my_file = open(self.block_to_node, 'r')
         lines = my_file.readlines()
         my_file.close()
-        my_file = open(self.block_to_nodes, "w")
+        my_file = open(self.block_to_node, "w")
         for each_line in lines:
             node_list = each_line.split("{")[1]
             node_list = node_list.split("}")[0]
@@ -278,7 +309,6 @@ class NameNode(rpyc.Service):
                 my_file.write(new_line)
             else:
                 my_file.write(each_line)
-        return
 
     def find_all_files(self, path):
         in_path = path
@@ -301,7 +331,7 @@ class NameNode(rpyc.Service):
         my_file.close()
         return file_list
 
-    def delete_path(self, path):
+    def exposed_delete_path(self, path):
         file_list = self.find_all_files(path)
         if not file_list:
             success = 0
@@ -355,39 +385,70 @@ class NameNode(rpyc.Service):
             my_file.write(str(contact_node) + "," + block + "," + str(forward_nodes) + "\n")
 
         my_file.close()
+        return
 
     def make_node_dictionary(self):
         nodes = dict()
         read_block_to_node = open(self.block_to_node)
         for line_of_text in read_block_to_node:
             if line_of_text != "\n":
-                brace_index = line_of_text.index("{")
-                # gets first number in curly braces
-                # REPLICATION_FACTOR must be 3 - BAD!!
-                if line_of_text[brace_index + 1] != "}":
-                    nodes[line_of_text.split()[1][1]] = nodes.get(line_of_text.split()[1][1], 0) + 1
-                    if line_of_text[brace_index + 2] != "}":
-                        nodes[line_of_text.split()[2][0]] = nodes.get(line_of_text.split()[2][0], 0) + 1
-                        if line_of_text[brace_index + 5] != "}":
-                            nodes[line_of_text.split()[3][0]] = nodes.get(line_of_text.split()[3][0], 0) + 1
+                node_list = line_of_text.split("{")[1]
+                node_list = node_list.split("}")[0]
+                if len(node_list) > 0:
+                    node_list = node_list.split(",")
+                    nodes[node_list[0]] = nodes.get(node_list[0], 0) + 1
+                    if len(node_list) > 1:
+                        nodes[node_list[1]] = nodes.get(node_list[1], 0) + 1
+                        if len(node_list) > 2:
+                            nodes[node_list[2]] = nodes.get(node_list[2], 0) + 1
         read_block_to_node.close()
 
         my_file = open(self.valid_nodes)
         for line_of_text in my_file:
             if (line_of_text not in nodes.keys()) & (line_of_text != "\n"):
-                nodes[line_of_text] = 0
+                nodes[line_of_text.strip("\n").strip(" ")] = 0
         return nodes
+
+    def heartbeat_timer(self):
+        threading.Timer(self.interval, self.heartbeat_timer).start()
+        self.heart_check()
+
+    def replication_timer(self):
+        threading.Timer(self.replication_interval, self.replication_timer).start()
+        self.replication_check()
 
 
 def main():
-    #node = NameNode()
+
+
+    """
+    #list_directory testing
+    sample_directory_path = "/Users/isabellebutterfield/"
+    #sample_current_path = "/Users/isabellebutterfield"
+    #print(sample_directory_path + "/")
+    #print(sample_current_path[0:len(sample_directory_path) + 1])
+    sample_path_list = []
+    directory_set = list_directory(sample_directory_path, sample_path_list)
+    for path in sample_path_list:
+        print(path)
+    #create_directory testing
+    create_directory("/Users/isabellebutterfield/SUFS")
+    #get_open_location testing
+    print(get_open_location(3,2))
+    """
+    # print(make_file(128, "/Users/isabellebutterfield/test.txt"))
+    # print(make_file(256, "/Users/isabellebutterfield/test2.txt"))
+    # node = NameNode()
 
     from rpyc.utils.server import ThreadedServer
-    t = ThreadedServer(NameNode, port=5001)
+    name_node = NameNode("")
+    name_node.heartbeat_timer()
+    name_node.replication_timer()
+    t = ThreadedServer(NameNode, port=5000)
     t.start()
 
-    # print(node.make_file(10, "/Users/isabellebutterfield/test7.txt"))
-    # node.replication_check()
+    #print(node.make_file(10, "/Users/isabellebutterfield/test7.txt"))
+    #node.replication_check()
 
     ############################################################
 
@@ -396,7 +457,6 @@ def main():
     # ['/Users/isabellebutterfield/test2.txt/part-0', '{3, 2, 4}', '/Users/isabellebutterfield/test2.txt/part-1', '{1, 3, 5}', '/Users/isabellebutterfield/test2.txt/part-2', '{2, 4, 1}', '/Users/isabellebutterfield/test2.txt/part-3', '{3, 5, 2}']
 
     ############################################################
-
 
 if __name__ == '__main__':
     main()

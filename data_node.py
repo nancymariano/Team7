@@ -9,7 +9,7 @@ import threading
 from rpyc.utils.server import ThreadedServer
 
 # Namenode information
-NAMENODE_IP_ADDR = '34.210.149.98'
+NAMENODE_IP_ADDR = '54.202.98.249'
 NAMENODE_PORT = 5000
 DATANODE_PORT = 5000
 DATANODE_IP_ADDR = '34.217.74.84'
@@ -65,7 +65,7 @@ class DataStore:
 
     # Creates a list of blocks
     def block_report(self, send_to_namenode=True):
-        blocks = list(self.stored_blocks)
+        blocks = [x.replace('!@!','/') for x in list(self.stored_blocks)]
 
         print('Printing block report: ', blocks)
 
