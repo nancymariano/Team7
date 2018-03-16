@@ -87,13 +87,13 @@ class DataStore:
             print('Commands from namenode: ', cmds)
             cmd = cmds.pop(0)
             if cmd == "delete":
-                path = cmds.pop(0)
+                path = cmds.pop(0).replace('/','!@!')
                 if path == '*':
                     self.delete_all()
                 else:
                     self.delete_block(path)
             elif cmd == "forward":
-                path = cmds.pop(0)
+                path = cmds.pop(0).replace('/','!@!')
                 dest = cmds.pop(0)
                 c = rpyc.connect(dest, DATANODE_PORT)
                 next_node = c.root
