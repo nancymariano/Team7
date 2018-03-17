@@ -4,43 +4,40 @@ import socket
 #import click
 import re
 import rpyc 
-import pickle 
+import pickle
+
+from urllib.request import build_opener 
+from S3Handler import S3Handler 
 
 
 from boto.s3.connection import S3Connection
 from boto.s3.key import Key
 from reply import Reply 
 from io import BytesIO 
-import boto
+import boto3
 import os 
 
 file_pattern = re.compile('^\\(.+\\)*(.+)\.(.+)$')
-block_size = 128*1024
+block_size = 134217728
 #data_node_IP = '' 
-name_node_IP = '34.210.149.98'
+name_node_IP = '54.202.98.249'
 #node_IPs = ['ip1','ip2']
 
 
-#this is a built in function of click that automatically creates a help menu
-def help(ctx, topic,**kw):
-    '''Show this message and exit'''
-    click.echo(cli.commands[topic].get_help(ctx))    
 
 #create will allow the user to create a file 
 #it will then tell the user if it was not successful  
-def make_file(file_path, to_path):
-    #user will need to make their file publically accessible for the scope of assignment 
-    #s3_client = boto.connect_s3()
-    #m = file_pattern.match(to_path) 
-    #file_name= m.group() 
-    #s3_client.download_file('s3_obj', 'file_name', 'client_file')
+def make_file(bucket_name, file_name, to_path):
+    s3 = boto3.resource('s3')#, aws_access_key_id=ACCESS_ID, aws_secret_access_key=ACCESS_KEY)
+    s3data = s3.Object(bucket_name=bucket_name, key=file_name).get()
+
+    file_size = s3data['ContentLength']
+    print(file_size)
 
     name_conn = rpyc.connect(name_node_IP, 5000, config = {'allow_public_attrs': True})
     name_node = name_conn.root
 
-    #name_reply = Reply.Load(name_node.make_file(os.path.getsize(to_path)), to_path))
-    file_size = os.path.getsize(file_path)
-    f = open(file_path, 'rb')
+ 
     name_reply = name_node.make_file(file_size, to_path)
 
     print(file_size) 
@@ -51,30 +48,30 @@ def make_file(file_path, to_path):
 
     send_blocks = [] 
     #j = 1 
-    k = 0
  
-    with open(file_path, 'rb') as input: 
-        bytes = input.read(block_size) 
-        while len(bytes) > 0:
-            bytes = input.read(block_size)
-            node_IPs = block_locations[k+1].split('{')[1]
-            node_IPs = node_IPs.split('}')[0]
-            node_IPs = node_IPs.split(',')
-            send_blocks.append([block_locations[k], bytes, node_IPs])
-            #j+=2 
-            k+=2
+    #with open(file_path, 'rb+') as input: 
+    #    block = []
+    #    bytes = input.read()
+    
+    for i in range(0, len(block_locations), 2):  
+        node_IPs = block_locations[i+1].split('{')[1]
+        node_IPs = node_IPs.split('}')[0]
+        node_IPs = node_IPs.split(',')
+        send_blocks.append([block_locations[i].replace("/","!@!"), node_IPs])
 
-    for block in send_blocks: 
-        data_node_IP = block[2][0]
-        print(data_node_IP)
-        data_conn = rpyc.connect(data_node_IP, 5000, config = {'allow_public_attrs': True})
-        data_node = data_conn.root 
-
-        print(block[0], block[1], block[2])
-        data_reply = Reply.Load(data_node.put_block(block[0], block[1], block[2]))
-        print(data_reply.status)
-        print('result: ', repr(data_reply))
-
+    i = 0 
+    try:
+        for chunk in iter(lambda: s3data['Body'].read(block_size), b''):
+            block_id = send_blocks[i][0]
+            print(send_blocks[i][1][0])
+            data_conn = rpyc.connect(send_blocks[i][1][0], 5000, config = {'allow_public_attrs': True})
+            data_node = data_conn.root 
+            #print("Now inserting: ", block_id)
+            data_reply = Reply.Load(data_node.put_block(block_id, chunk, send_blocks[i][1]))
+            print(data_reply.status)
+            i+=1
+    except:
+        pass  
 
 
 #delete will allow the user to delete a file given a full file path 
@@ -93,35 +90,57 @@ def delete_file(path):
 #it will ask NameNode to delete
 #it will then tell the user whether or not the delete was successful
 #if the file does not exist, it will tell the user
-def read_file(path):
-    m = file_pattern.match(to_path) 
-    file_name= m.group() 
+def read_file(path, file_name): 
 
     name_conn = rpyc.connect(name_node_IP, 5000, config = {'allow_public_attrs': True})
     name_node = name_conn.root
 
     block_locations = []
     name_reply = name_node.read_file(path, block_locations)
+    #block_locations = name_reply
+    print(block_locations)
 
-    temp = block_locations.split(',')
+    if name_reply is 0: 
+        print("File could not be located")
+        return  
+
+    for i in range(len(block_locations)):
+        node_IPs = block_locations[i].split(",")
+        name = block_locations[i][0]
+        node_IPs = block_locations[i][1].split('{')
+        node_IPs = node_IPs.split('}')[0]
+        node_IPs = node_IPs.split(',')
+        send_blocks.append([block_locations[i].replace("/","!@!"), node_IPs])
+
+    fetched_bytes = BytesIO()
+    fetched_bytes.write(name_reply)
+
+    fetched_bytes.flush()
+    fetched_bytes.seek(0)
+
+    #temp = block_locations.split(',')
     receive_blocks = [] 
     i = 0 
+    '''
     for i in range(0, len(block_locations), 2): 
-        receive_blocks[i] = [block_locations[i]]
+        receive_blocks.append([block_locations[i]])
         node_IPs = block_locations[i+1].split('{')[1]
         node_IPs = node_IPs.split('}')[0]
         node_IPs = node_IPs.split(',')
         receive_blocks[i][0].append(node_IPs)
-    
-    with open(file_name, 'a') as output: 
-        for block in receive_blocks:
-            data_conn = rpyc.connect(block[1][0], 5000, config = {'allow_public_attrs': True})
-            data_node = data_conn.root
-            data_reply = Reply.Load(data_node.get_block(block))
-            if not data_reply.error:
-                client_file.append(data_reply.result)
+    '''
+    for block in receive_blocks:
+        data_conn = rpyc.connect(block, 5000, config = {'allow_public_attrs': True})
+        data_node = data_conn.root
+        data_reply = Reply.Load(data_node.get_block(block))
+        fetched_bytes = BytesIO()
+        fetched_bytes.write(data_reply.result)
 
-    return client_file
+        fetched_bytes.flush()
+        fetched_bytes.seek(0)
+        if not data_reply.error:
+            with open(file_name, 'ab+') as dest: 
+                shutil.copyfileobj(fetched_bytes, dest, blocksize)
     
 #mkdir will allow the user to make a directory in SUFS
 #it will ask the NameNode to create the path 
@@ -185,25 +204,22 @@ def list_data_nodes(path):
 
 def call_function(command): 
     if(command[0] == 'upload'):
-        if len(command) != 3: 
+        if len(command) != 4: 
             print('error: wrong number args')
         else: 
-            make_file(command[1], command[2]) 
+            make_file(command[1], command[2], command[3]) 
     if(command[0] == 'rm'):
         if len(command) != 2: 
             print('error: wrong number args')
         else: 
             delete_file(command[1]) 
-    if(command[0] == 'ls'):
-        if len(command) != 2: 
-            print('error: wrong number args')
-        else: 
-            list_dir(command[1]) 
+    if(command[0] == 'ls'): 
+        list_dir(command[1]) 
     if(command[0] == 'download'):
-        if len(command) != 2: 
+        if len(command) != 3: 
             print('error: wrong number args')
         else: 
-            read_file(command[1])
+            read_file(command[1], command[2])
     if(command[0] == 'mkdir'): 
         if len(command) != 2: 
             print('error: wrong number args')
@@ -221,6 +237,20 @@ def call_function(command):
             list_data_nodes(command[1])
     if(command[0] == 'help'): 
         print('List of commands: upload, rm, ls, download, mkdir, rmdir, lsdata')
+        print('Usage:')
+        print('upload <s3 bucket name> <file name> <SUFS path name>')
+        print('upload test-files-project 1GB.bin hahahapleasework.bin')
+        print('rm <SUFS path name>')
+        print('rm hahahapleasework.bin')
+        print('ls <SUFS path name>')
+        print('ls coolestdomainintheuniverse')
+        print('download <SUFS path name> <file name>')
+        print('download hahahapleasework.bin 1GB.bin')
+        print('mkdir <SUFS dir name>')
+        print('rmdir <SUFS dir name>')
+        print('rmdir <SUFS path name>')
+        
+
 
 def main(): 
     cont = True 
